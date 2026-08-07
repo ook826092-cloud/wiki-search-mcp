@@ -16,7 +16,9 @@ jobs:
       - name: Syntax check
         run: python -m py_compile server.py
       - name: Ruff check (F errors only, strict)
-        run: ruff check server.py --select F --output-format=github
+        run: |
+          ruff --version
+          ruff check server.py --select F
       - name: Bandit security scan
         run: bandit -q server.py -f screen
       - name: MyPy type check
