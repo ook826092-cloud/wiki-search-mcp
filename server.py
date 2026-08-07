@@ -81,7 +81,7 @@ BM25_WEIGHTS = {
 
 _sync_lock = threading.Lock()
 _sync_thread = None  # #2 后台同步线程（懒同步不阻塞查询）
-_embed_lock = threading.Lock()  # 1.3 嵌入计数线程锁
+_embed_lock = threading.Lock()  # 嵌入计数线程锁
 _embed_tokens_used = 0  # 本进程累计嵌入 tokens（每次成功批次落库 meta，防重启丢失）
 
 # 同义词/别名扩展（#5）：搜索时互相补全
@@ -93,7 +93,7 @@ SYNONYMS = {
     "RAG": "检索增强", "检索增强": "RAG",
     "MCP": "模型上下文协议", "模型上下文协议": "MCP",
 }
-for _k, _v in SYNONYMS.items():  # 2.9 同义词加入 jieba 词典（防二次切碎）
+for _k, _v in SYNONYMS.items():  # 同义词加入 jieba 词典（防二次切碎）
     jieba.add_word(_k); jieba.add_word(_v)
 
 def _persist_embed_usage(total: int):
@@ -133,7 +133,7 @@ try:
     _fh = _lh.RotatingFileHandler(LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8")  # 优化：日志 5MB×3
     _handlers.append(_fh)
 except Exception as _e:
-    # 3.4 日志文件创建失败不静默（至少 stderr 可见）
+    # 日志文件创建失败不静默（至少 stderr 可见）
     print(f"[wiki-search] WARNING: 日志文件创建失败({LOG_FILE}): {_e}", file=sys.stderr)
 logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO),
                     format="%(asctime)s %(levelname)s %(message)s",
@@ -141,7 +141,7 @@ logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO),
 logger = logging.getLogger("wiki-search")
 
 mcp = FastMCP("wiki-search")
-VAULT_NAME = WIKI_ROOT.resolve().name  # 3.3 防止尾斜杠导致空名
+VAULT_NAME = WIKI_ROOT.resolve().name  # 防止尾斜杠导致空名
 
 def _obsidian_url(rel_path: str) -> str:
     from urllib.parse import quote
@@ -149,7 +149,7 @@ def _obsidian_url(rel_path: str) -> str:
 
 # ---------- 数据库 ----------
 _schema_initialized = False
-_schema_lock = threading.Lock()  # 2.10 初始化加锁防并发重复 DDL
+_schema_lock = threading.Lock()  # 初始化加锁防并发重复 DDL
 
 def _check_vec_dim(db):
     """检查 pages_vec 表维度与 EMBED_DIM 是否一致（不一致提示 full reindex）"""
@@ -179,7 +179,7 @@ def get_db():
         except Exception as e:
             logger.warning("vec0 加载失败(无语义检索): %s", e)
     if not _schema_initialized:
-        with _schema_lock:  # 2.10 防止多线程同时初始化
+        with _schema_lock:  # 防止多线程同时初始化
             if not _schema_initialized:
                 db.execute("PRAGMA journal_mode=WAL")
                 db.execute("PRAGMA synchronous=NORMAL")
@@ -240,7 +240,7 @@ elif "free" in EMBED_MODEL.lower():
 else:
     EMBED_CONCURRENCY = 4   # 阿里云 v4 等常规模型：限流 1800RPM 可承受
 
-def embed_texts(texts: List[str]) -> List[Optional[List[float]]]:  # 3.1 类型注解精确化
+def embed_texts(texts: List[str]) -> List[Optional[List[float]]]:  # 类型注解精确化
     """调用可配置的 OpenAI 兼容嵌入接口。
     返回与输入**等长**的列表，失败位填 None（保证索引对齐，杜绝向量错位）。
     #3 并发：多线程同时发多个批次（EMBED_CONCURRENCY），大幅提速 full reindex"""
@@ -254,7 +254,7 @@ def embed_texts(texts: List[str]) -> List[Optional[List[float]]]:  # 3.1 类型�
         batch = texts[start:start + EMBED_BATCH]
         body = json.dumps({"model": EMBED_MODEL, "input": batch,
                            "dimensions": EMBED_DIM}).encode()  # 显式传维度，杜绝默认维度漂移
-        for attempt in range(3):  # 2.2 总 3 次尝试（初始+2重试），timeout 20s 控制最坏耗时
+        for attempt in range(3):  # 总 3 次尝试（初始+2重试），timeout 20s 控制最坏耗时
             try:
                 req = urllib.request.Request(
                     EMBED_BASE_URL.rstrip("/") + "/embeddings",
@@ -262,17 +262,17 @@ def embed_texts(texts: List[str]) -> List[Optional[List[float]]]:  # 3.1 类型�
                                         "Content-Type": "application/json"})
                 d = json.loads(urllib.request.urlopen(req, timeout=20).read())
                 batch_vecs = [x["embedding"] for x in d["data"]]
-                if len(batch_vecs) != len(batch):  # 3.4 数量防御：异常 provider 返回数不匹配
+                if len(batch_vecs) != len(batch):  # 数量防御：异常 provider 返回数不匹配
                     logger.warning("嵌入返回数量 %d != 请求 %d，视为失败", len(batch_vecs), len(batch))
                     return start, None
                 bad = {len(v) for v in batch_vecs if len(v) != EMBED_DIM}
                 if bad:
-                    logger.warning("嵌入维度异常 %s（期望 %d），尝试 %d/3", bad, EMBED_DIM, attempt + 1)  # 2.8 计数修正
+                    logger.warning("嵌入维度异常 %s（期望 %d），尝试 %d/3", bad, EMBED_DIM, attempt + 1)  # 计数修正
                     time.sleep(2)
                     continue
                 global _embed_tokens_used
                 tok = (d.get("usage") or {}).get("total_tokens", 0) or 0
-                with _embed_lock:  # 1.3 线程安全累加
+                with _embed_lock:  # 线程安全累加
                     _embed_tokens_used += tok
                 return start, batch_vecs
             except Exception as e:
@@ -331,7 +331,7 @@ def safe_resolve(root: Path, rel: str) -> Optional[Path]:
     try:
         target = (root / rel).resolve()
         target.relative_to(root.resolve())
-        return target  # 1.5 返回 resolve 后的规范路径（安全且一致）
+        return target  # 返回 resolve 后的规范路径（安全且一致）
     except (ValueError, OSError):
         return None
 
@@ -367,7 +367,7 @@ def cjk_chunks(s: str):
     return re.findall(
         r"[\u2E80-\u9FFF\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFFEF"
         r"\u3040-\u309F\u30A0-\u30FF\u31F0-\u31FF\uAC00-\uD7AF\u3400-\u4DBF"
-        r"\U00020000-\U0002FFFF\U00030000-\U0003FFFF]+", s)  # 3.8 含 CJK 扩展区生僻字
+        r"\U00020000-\U0002FFFF\U00030000-\U0003FFFF]+", s)  # 含 CJK 扩展区生僻字
 
 def tokenize_query(query: str):
     fts_terms, like_terms = [], []
@@ -408,11 +408,11 @@ def make_snippet(text: str, terms: list, radius: int = SNIPPET_RADIUS) -> str:
     seg = body[start:end].replace("\n", " ")
     seg = _highlight(seg, terms)  # 优化：段内所有命中词高亮（不只定位词）
     prefix = "…" if start > 0 else ""
-    suffix = "…" if end < len(body) else ""  # 3.6 到文末不加省略号
+    suffix = "…" if end < len(body) else ""  # 到文末不加省略号
     return prefix + seg + suffix
 
 def first_heading(text: str) -> Optional[str]:
-    m = re.search(r"^\s*#\s+(.+)$", text, re.M)  # 3.4 兼容带前导空格的标题
+    m = re.search(r"^\s*#\s+(.+)$", text, re.M)  # 兼容带前导空格的标题
     return m.group(1).strip() if m else None
 
 def set_meta(db, k, v):
@@ -453,7 +453,7 @@ def _maybe_sync(db):
     if not _sync_lock.acquire(blocking=False): return
     try:
         _last_sync_check = now
-        if not WIKI_ROOT.exists():  # 1.4 目录不存在直接跳过，不抛异常
+        if not WIKI_ROOT.exists():  # 目录不存在直接跳过，不抛异常
             logger.warning("WIKI_ROOT 不存在: %s", WIKI_ROOT)
             return
         page_mtimes = get_meta(db, "page_mtimes", {})
@@ -462,8 +462,8 @@ def _maybe_sync(db):
         from concurrent.futures import ThreadPoolExecutor
         def _stat(f):
             try: return str(f.relative_to(WIKI_ROOT)), f.stat().st_mtime
-            except (OSError, ValueError): return None  # 2.2 含 symlink 路径异常
-        files = _iter_md_files()  # 3.3 直接传生成器（不 list 物化，省内存）
+            except (OSError, ValueError): return None  # 含 symlink 路径异常
+        files = _iter_md_files()  # 直接传生成器（不 list 物化，省内存）
         with ThreadPoolExecutor(max_workers=16) as ex:
             for res in ex.map(_stat, files):
                 if res is None: continue
@@ -490,11 +490,11 @@ def _spawn_sync_thread():
                 logger.info("后台增量同步完成")
             except Exception as e:
                 logger.exception("后台同步失败: %s", e)
-        _sync_thread = threading.Thread(target=_worker)  # 2.5 非 daemon：退出时等待同步完成
+        _sync_thread = threading.Thread(target=_worker)  # 非 daemon：退出时等待同步完成
         _sync_thread.start()
 
 # ---------- 检索核心 ----------
-_IS_TEMPLATE = lambda rel: rel.startswith(("wiki/Welcome", "wiki/欢迎", "wiki/schema/"))  # 3.1 模块级模板判定
+_IS_TEMPLATE = lambda rel: rel.startswith(("wiki/Welcome", "wiki/欢迎", "wiki/schema/"))  # 模块级模板判定
 
 def _query_nature(query: str) -> str:
     """判断查询性质：short(短词/专有名词) / desc(描述句) / balanced(均衡)。
@@ -539,7 +539,7 @@ def _search_table(db, table: str, query: str, limit: int):
                 break
     fts_terms, like_terms = tokenize_query(query)
     if ENABLE_TRIGRAM and fts_terms:
-        expr = " OR ".join('"%s"' % t.replace('"', "") for t in fts_terms)  # 2.7 过滤引号防 FTS 语法错误
+        expr = " OR ".join('"%s"' % t.replace('"', "") for t in fts_terms)  # 过滤引号防 FTS 语法错误
         try:
             rows = db.execute(
                 f"SELECT path, bm25({table}, {BM25_WEIGHTS[table]}) AS rank FROM {table} "
@@ -549,9 +549,9 @@ def _search_table(db, table: str, query: str, limit: int):
                 add(row["path"], -float(row["rank"]), "fts")
         except sqlite3.Error: pass
     for t in like_terms:
-        t_esc = t.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")  # 3.3 转义 SQL 通配符
+        t_esc = t.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")  # 转义 SQL 通配符
         pat = "%" + t_esc + "%"
-        # 1.4 LIKE 后备查原始内容表（jieba 分词列短语匹配失效）
+        # LIKE 后备查原始内容表（jieba 分词列短语匹配失效）
         try:
             if table == "pages_fts":
                 rows = db.execute(
@@ -600,7 +600,7 @@ def _rerank_paths(query: str, paths: List[str]) -> List[str]:
     for p in paths[:RERANK_TOP]:
         f = WIKI_ROOT / p
         try:
-            with f.open("r", encoding="utf-8", errors="ignore") as fh:  # 2.1 只读前 500 字符，不全量加载
+            with f.open("r", encoding="utf-8", errors="ignore") as fh:  # 只读前 500 字符，不全量加载
                 docs.append(fh.read(500))
             valid.append(p)
         except Exception:
@@ -615,7 +615,7 @@ def _rerank_paths(query: str, paths: List[str]) -> List[str]:
 @mcp.tool()
 def reindex(full: bool = False) -> dict:
     """重建索引（含向量化）。默认增量；full=True 全量。嵌入模型按环境变量配置。"""
-    if not WIKI_ROOT.exists():  # 3.2 手动调用时目录缺失不崩溃
+    if not WIKI_ROOT.exists():  # 手动调用时目录缺失不崩溃
         return {"error": "WIKI_ROOT 不存在: " + str(WIKI_ROOT)}
     with closing(get_db()) as db:
         page_mtimes = get_meta(db, "page_mtimes", {})
@@ -656,18 +656,18 @@ def reindex(full: bool = False) -> dict:
                 pages_data.append((rel, title, text, tags))
                 meta_data.append((rel, title, ptype or "note", tags, aliases, st.st_size, mt))
                 page_mtimes[rel] = mt; pages_upd += 1; updated_pages.add(rel)
-            for rel in (k for k in page_mtimes if not (WIKI_ROOT / k).exists()):  # 3.5 生成器省内存
+            for rel in (k for k in page_mtimes if not (WIKI_ROOT / k).exists()):  # 生成器省内存
                 try: db.execute("DELETE FROM pages_fts WHERE path=?", (rel,))
                 except sqlite3.Error: pass
                 db.execute("DELETE FROM pages_fts_jieba WHERE path=?", (rel,))
                 db.execute("DELETE FROM page_meta WHERE path=?", (rel,))
-                db.execute("DELETE FROM attachment_links WHERE page_path=?", (rel,))  # 1.3 清理引用僵尸
+                db.execute("DELETE FROM attachment_links WHERE page_path=?", (rel,))  # 清理引用僵尸
                 if EMBED_ENABLED:
                     try: db.execute("DELETE FROM pages_vec WHERE path=?", (rel,))
                     except sqlite3.Error: pass
                 page_mtimes.pop(rel); updated_pages.discard(rel)
             if pages_data:
-                # 1.1 增量前先 DELETE（防 FTS5 重复记录）
+                # 增量前先 DELETE（防 FTS5 重复记录）
                 for rel, *_ in pages_data:
                     try: db.execute("DELETE FROM pages_fts WHERE path=?", (rel,))
                     except sqlite3.Error: pass
@@ -703,13 +703,13 @@ def reindex(full: bool = False) -> dict:
             # #1 内容转换跳过缓存（失败/空文本文档 1h 内不重试，避免懒同步重复 markitdown）
             att_content_skip = get_meta(db, "att_content_skip", {}) if not full else {}
             if att_content_skip:
-                # 3.1 清理 >24h 过期条目（防永久失败文件无限累积）
+                # 清理 >24h 过期条目（防永久失败文件无限累积）
                 _now = time.time()
                 att_content_skip = {k: v for k, v in att_content_skip.items() if _now - v < 86400}
             _md = None
             try:
                 from markitdown import MarkItDown
-                _md = MarkItDown()  # 2.12 实例化提到循环外
+                _md = MarkItDown()  # 实例化提到循环外
             except Exception:
                 pass
             for f in VAULT_ROOT.rglob("*"):
@@ -736,15 +736,15 @@ def reindex(full: bool = False) -> dict:
                             att_content_skip[rel] = time.time()  # 空文本（如扫描件无文本层）跳过
                     except Exception:
                         att_content_skip[rel] = time.time()  # 转换失败跳过
-            for rel in (k for k in att_mtimes if not (VAULT_ROOT / k).exists()):  # 4.4 生成器省内存
+            for rel in (k for k in att_mtimes if not (VAULT_ROOT / k).exists()):  # 生成器省内存
                 try: db.execute("DELETE FROM attachments_fts WHERE path=?", (rel,))
                 except sqlite3.Error: pass
                 db.execute("DELETE FROM attachments_fts_jieba WHERE path=?", (rel,))
                 db.execute("DELETE FROM attachment_content_fts WHERE path=?", (rel,))
-                db.execute("DELETE FROM attachment_links WHERE att_path=?", (rel,))  # 1.3 清理引用僵尸
+                db.execute("DELETE FROM attachment_links WHERE att_path=?", (rel,))  # 清理引用僵尸
                 db.execute("DELETE FROM attachments WHERE path=?", (rel,)); att_mtimes.pop(rel)
             if atts_data:
-                # 1.1 增量前先 DELETE（防 FTS5 重复）
+                # 增量前先 DELETE（防 FTS5 重复）
                 for rel, *_ in atts_fts_data:
                     try: db.execute("DELETE FROM attachments_fts WHERE path=?", (rel,))
                     except sqlite3.Error: pass
@@ -756,7 +756,7 @@ def reindex(full: bool = False) -> dict:
                 db.executemany("INSERT OR REPLACE INTO attachments(path,filename,ext,size,updated) VALUES(?,?,?,?,?)", atts_data)
             if atts_content:
                 for rel, _ in atts_content:
-                    try:  # 3.3 异常保护（防虚拟表损坏导致整个事务回滚）
+                    try:  # 异常保护（防虚拟表损坏导致整个事务回滚）
                         db.execute("DELETE FROM attachment_content_fts WHERE path=?", (rel,))
                     except sqlite3.Error:
                         pass
@@ -768,7 +768,7 @@ def reindex(full: bool = False) -> dict:
             if full: db.execute("DELETE FROM attachment_links")
             # 附件引用模式：![[]] / ![]() / [[]]（含相对路径、无扩展名、大小写变体）
             pat = re.compile(
-                r"!?\[\[([^\]|#]+(?:\.[A-Za-z0-9]{1,15})?)\]\]"   # 2.4 长扩展名(.canvas/.excalidraw)
+                r"!?\[\[([^\]|#]+(?:\.[A-Za-z0-9]{1,15})?)\]\]"   # 长扩展名(.canvas/.excalidraw)
                 r"|!\[[^\]]*\]\(([^)]+)\)")                       # ![](path)
             for pref in link_sources:
                 f = WIKI_ROOT / pref
@@ -824,7 +824,7 @@ def reindex(full: bool = False) -> dict:
                         "full" if full else "incremental", pages_upd, atts_upd, links,
                         len(embedded) if EMBED_ENABLED else -1, time.time() - _reindex_t0)
         except Exception:
-            try:  # 2.2 rollback 保护：无活跃事务时不让 OperationalError 覆盖原始异常
+            try:  # rollback 保护：无活跃事务时不让 OperationalError 覆盖原始异常
                 db.rollback()
             except sqlite3.OperationalError:
                 pass
@@ -884,20 +884,20 @@ def search(query: str, limit: int = 10, page_type: str = "", tags: str = "",
     for k, v in SYNONYMS.items():
         if k in _qwords and v not in _qwords:
             query_ext += " " + v
-    # 2.5 snippet 只保留 jieba 完整词（避免 3-gram 干扰高亮/定位）
+    # snippet 只保留 jieba 完整词（避免 3-gram 干扰高亮/定位）
     snippet_terms = [w for w in _jieba_cached(query) if len(w) >= 2]
     _t0 = time.time()
     since_ts = None
     if since:
-        try:  # 2.1 naive datetime 按本地时区解析（与 st_mtime 语义一致，防 UTC 偏移 8h 漏查）
+        try:  # naive datetime 按本地时区解析（与 st_mtime 语义一致，防 UTC 偏移 8h 漏查）
             import datetime as _dt
             since_ts = _dt.datetime.strptime(since, "%Y-%m-%d").timestamp()
         except ValueError:
-            logger.warning("since 参数解析失败: %r，时间过滤已禁用", since)  # 3.4 不再静默
+            logger.warning("since 参数解析失败: %r，时间过滤已禁用", since)  # 不再静默
             since_ts = None
     pt_list = [p.strip() for p in page_type.split(",") if p.strip()] if page_type else []
-    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []  # 2.3 tags 多值
-    limit = max(1, min(limit, 50))  # 1.2 limit 校验提前（防负切片）
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []  # tags 多值
+    limit = max(1, min(limit, 50))  # limit 校验提前（防负切片）
     eff_limit = limit * FILTER_LIMIT_MULT if (page_type or tags or since) else limit
     with closing(get_db()) as db:
         _maybe_sync(db)
@@ -942,7 +942,7 @@ def search(query: str, limit: int = 10, page_type: str = "", tags: str = "",
             meta = db.execute("SELECT title,page_type,tags,updated FROM page_meta WHERE path=?", (path,)).fetchone()
             if not meta: continue
             if pt_list and meta["page_type"] not in pt_list: continue
-            if tag_list:  # 2.2 标签集合精确匹配（"ai" 不匹配 "ai-ethics"）
+            if tag_list:  # 标签集合精确匹配（"ai" 不匹配 "ai-ethics"）
                 tag_set = set(re.split(r"[,，\s]+", meta["tags"] or ""))
                 if not tag_set.issuperset(tag_list): continue
             if since_ts is not None and (meta["updated"] or 0) < since_ts: continue
@@ -983,7 +983,7 @@ def search(query: str, limit: int = 10, page_type: str = "", tags: str = "",
 @mcp.tool()
 def similar(path: str, limit: int = 5) -> list:
     """语义相似笔记推荐：给一篇笔记，找语义最像的其它笔记（知识探索/复利）。"""
-    limit = max(1, min(limit, 50))  # 2.3 参数校验
+    limit = max(1, min(limit, 50))  # 参数校验
     if not EMBED_ENABLED:
         return [{"error": "嵌入未配置（EMBED_BASE_URL/KEY/MODEL）"}]
     f = safe_resolve(WIKI_ROOT, path)
@@ -1030,7 +1030,7 @@ def preview(path: str, max_lines: int = 30) -> str:
 def search_attachment(query: str, ext: str = "", limit: int = 10) -> list:
     """检索附件（图片/PDF/音视频等），按文件名/路径检索，返回附件位置和引用它的页面。
     参数: query=检索词(必填); ext=扩展名过滤如png/pdf(可选); limit=条数(默认10)"""
-    limit = max(1, min(limit, 50))  # 2.3 参数校验
+    limit = max(1, min(limit, 50))  # 参数校验
     with closing(get_db()) as db:
         _maybe_sync(db)
         results = _search_table(db, "attachments_fts", query, limit)
@@ -1046,7 +1046,7 @@ def search_attachment(query: str, ext: str = "", limit: int = 10) -> list:
                 for row in rows:
                     if row["path"] not in results:
                         results[row["path"]] = (5.0 - (float(row["rank"]) if row["rank"] else 0), "content")
-                    else:  # 2.7 内容得分覆盖文件名低分
+                    else:  # 内容得分覆盖文件名低分
                         s = 5.0 - (float(row["rank"]) if row["rank"] else 0)
                         if s > results[row["path"]][0]:
                             results[row["path"]] = (s, "content")
@@ -1104,8 +1104,8 @@ def list_pages(page_type: str = "", tags: str = "") -> list:
     参数: page_type=类型过滤如concept/entity/note(可选); tags=标签过滤(可选)"""
     with closing(get_db()) as db:
         pt_list = [p.strip() for p in page_type.split(",") if p.strip()] if page_type else []
-        tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []  # 2.1 tags 多值
-        # 2.2 标签集合精确匹配（与 search 语义一致）
+        tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []  # tags 多值
+        # 标签集合精确匹配（与 search 语义一致）
         if pt_list:
             ph = ",".join("?" * len(pt_list))
             rows = db.execute(f"SELECT path,title,page_type,tags FROM page_meta WHERE page_type IN ({ph}) ORDER BY path", pt_list)
@@ -1144,7 +1144,7 @@ def status() -> dict:
                 by_month[k] = by_month.get(k, 0) + 1
             except (ValueError, OSError, OverflowError):
                 pass
-        by_month = dict(sorted(by_month.items()))  # 4.3 月份有序
+        by_month = dict(sorted(by_month.items()))  # 月份有序
         top_tags = {}
         for r in db.execute("SELECT tags FROM page_meta WHERE tags != ''"):
             for t in re.split(r"[,，\s]+", r["tags"] or ""):
@@ -1163,7 +1163,7 @@ def status() -> dict:
 def fetch_url(url: str, max_chars: int = 20000) -> dict:
     """抓取网页 URL → markdown。返回 {"content": 文本} 或 {"error": 原因}。
     参数: url=http/https 链接(必填); max_chars=返回最大字符数(默认20000)"""
-    max_chars = max(1, max_chars)  # 2.3 参数校验
+    max_chars = max(1, max_chars)  # 参数校验
     import subprocess, shutil
     if not shutil.which("defuddle"):  # 建议20: 前置检查（比 FileNotFoundError 更友好）
         return {"error": "defuddle 未安装（npm install -g defuddle，需 Node.js）"}
@@ -1173,7 +1173,7 @@ def fetch_url(url: str, max_chars: int = 20000) -> dict:
         r = subprocess.run(["defuddle", "parse", url, "--md"],
                            capture_output=True, text=True, timeout=60)
         if r.returncode != 0:
-            return {"error": "抓取失败: " + (r.stderr or r.stdout)[:300]}  # 3.2 错误结构化
+            return {"error": "抓取失败: " + (r.stderr or r.stdout)[:300]}  # 错误结构化
         return {"content": r.stdout[:max_chars]}
     except FileNotFoundError:
         return {"error": "defuddle 未安装（Termux: 需 defuddle CLI）"}
@@ -1186,7 +1186,7 @@ def fetch_url(url: str, max_chars: int = 20000) -> dict:
 def related(path: str, limit: int = 5) -> list:
     """相关笔记推荐（#2）：共享引用链接 + 关键词重叠（知识探索，互补 similar 的纯语义）。
     参数: path=相对 vault 路径(必填); limit=条数(默认5)"""
-    limit = max(1, min(limit, 50))  # 2.3 参数校验
+    limit = max(1, min(limit, 50))  # 参数校验
     f = safe_resolve(WIKI_ROOT, path)
     if not f or not f.is_file():
         return [{"error": "INVALID PATH: " + path}]
@@ -1232,7 +1232,7 @@ def lint(path: str = "wiki", limit: int = 100) -> dict:
     - 模板豁免：wiki/Welcome*/欢迎*/schema/（模板示例页占位链接不判链）
     参数: path=扫描目录(vault 相对, 默认 wiki); limit=最多返回断链数"""
     limit = max(1, min(limit, 500))
-    # 2.1 安全校验：path 必须在 vault 内（防 ../../etc 目录遍历逃逸）
+    # 安全校验：path 必须在 vault 内（防 ../../etc 目录遍历逃逸）
     if not safe_resolve(WIKI_ROOT, path):
         return {"error": "INVALID PATH: " + path, "broken": [], "checked": 0, "total_links": 0}
     scan_root = WIKI_ROOT / path
@@ -1241,7 +1241,7 @@ def lint(path: str = "wiki", limit: int = 100) -> dict:
     pat = re.compile(r"\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]*)?\]\]")
     broken, checked, total, exempt = [], 0, 0, 0
     with closing(get_db()) as db:
-        # 3.5 all_names 从 DB 构建（page_meta + attachments，避免全库文件遍历）
+        # all_names 从 DB 构建（page_meta + attachments，避免全库文件遍历）
         all_names = set()
         for r in db.execute("SELECT path FROM page_meta UNION SELECT path FROM attachments"):
             p = r["path"]
@@ -1274,7 +1274,7 @@ def lint(path: str = "wiki", limit: int = 100) -> dict:
                             exists = True
                             break
                 if not exists:
-                    # 3.3 suggest 从数据库查真实存在的路径（LIKE 通配符转义）
+                    # suggest 从数据库查真实存在的路径（LIKE 通配符转义）
                     sug = ""
                     try:
                         name_esc = name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
@@ -1288,7 +1288,7 @@ def lint(path: str = "wiki", limit: int = 100) -> dict:
                     except Exception:
                         pass
                     broken.append({"page": rel, "link": target,
-                                   "suggest": str(sug)})  # 2.1 str() 转换防 Path 不可序列化
+                                   "suggest": str(sug)})  # str() 转换防 Path 不可序列化
                     if len(broken) >= limit: break
             if len(broken) >= limit: break
     return {"checked_pages": checked, "total_links": total,
@@ -1300,7 +1300,7 @@ def near_duplicates(path: str = "wiki", threshold: float = 0.7, limit: int = 50)
     参数: path=扫描目录(vault 相对, 默认 wiki; 全库较慢); threshold=Jaccard 相似度阈值; limit=最多对数"""
     limit = max(1, min(limit, 200))
     threshold = max(0.0, min(threshold, 1.0))  # 钳制到 [0,1]
-    # 2.1 安全校验：path 必须在 vault 内（防目录遍历逃逸）
+    # 安全校验：path 必须在 vault 内（防目录遍历逃逸）
     if not safe_resolve(WIKI_ROOT, path):
         return [{"error": "INVALID PATH: " + path}]
     scan_root = WIKI_ROOT / path
@@ -1309,7 +1309,7 @@ def near_duplicates(path: str = "wiki", threshold: float = 0.7, limit: int = 50)
     docs = {}
     for f in scan_root.rglob("*.md"):
         try:
-            text = f.read_text(encoding="utf-8", errors="ignore")[:10240]  # 3.6 截断 10KB 防 _jieba_cached 大 key 污染
+            text = f.read_text(encoding="utf-8", errors="ignore")[:10240]  # 截断 10KB 防 _jieba_cached 大 key 污染
             words = set(w for w in _jieba_cached(text) if len(w) >= 2)
             if len(words) >= 10:  # 太短的页不参与
                 docs[str(f.relative_to(WIKI_ROOT))] = words
@@ -1338,7 +1338,7 @@ def extract_document(path: str, max_chars: int = 20000, backend: str = "markitdo
              / mineru_pro(云端精准版,需 MINERU_API_KEY,≤200MB/≤200页,vlm模型)
     page_range: 仅 mineru 后端有效，页码范围如 "1-20"（超 20 页的文档必须指定）。
     参数: path=相对 vault 路径(必填); max_chars=返回最大字符数(默认20000)"""
-    max_chars = max(1, max_chars)  # 2.3 参数校验
+    max_chars = max(1, max_chars)  # 参数校验
     f = safe_resolve(VAULT_ROOT, path)
     if not f or not f.is_file():
         return {"error": "INVALID PATH: " + path}
@@ -1355,7 +1355,7 @@ def extract_document(path: str, max_chars: int = 20000, backend: str = "markitdo
     except Exception as e:
         return {"error": f"转换失败: {type(e).__name__}: {str(e)[:200]}"}
 
-def _extract_mineru_pro(f: Path, max_chars: int) -> dict:  # 3.1 签名修正
+def _extract_mineru_pro(f: Path, max_chars: int) -> dict:  # 签名修正
     """MinerU 精准解析 API（/api/v4）：需 MINERU_API_KEY，≤200MB/≤200 页，vlm 模型。
     流程：POST /api/v4/file-urls/batch 申请签名上传 → PUT 到 OSS →
     GET /api/v4/extract-results/batch/{batch_id} 轮询 → done 后下载 zip 取 full.md。"""
@@ -1418,7 +1418,7 @@ def _extract_mineru_pro(f: Path, max_chars: int) -> dict:  # 3.1 签名修正
     except Exception as e:
         return {"error": f"MinerU 精准解析失败: {type(e).__name__}: {str(e)[:200]}"}
 
-def _extract_mineru(f: Path, max_chars: int, page_range: str = "") -> dict:  # 3.1 签名修正
+def _extract_mineru(f: Path, max_chars: int, page_range: str = "") -> dict:  # 签名修正
     """MinerU Agent 轻量云 API（官方文档确认：免 token，IP 限频，≤10MB/≤20 页，免费）。
     流程：POST /api/v1/agent/parse/file 申请签名上传 → PUT 到 OSS → GET /api/v1/agent/parse/{task_id} 轮询
     → done 后 GET markdown_url 下载 markdown。用 requests（urllib TLS 指纹被 WAF 403）。"""
