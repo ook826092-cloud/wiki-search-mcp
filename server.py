@@ -128,7 +128,7 @@ LOG_FILE  = os.environ.get("LOG_FILE", str(Path.home() / "wiki-search" / "wiki-s
 
 # 日志：控制台 + 滚动文件（1MB × 3），级别可配
 import logging.handlers as _lh
-_handlers = [logging.StreamHandler()]
+_handlers: list = [logging.StreamHandler()]
 try:
     _fh = _lh.RotatingFileHandler(LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8")  # 优化：日志 5MB×3
     _handlers.append(_fh)
@@ -246,7 +246,7 @@ def embed_texts(texts: List[str]) -> List[Optional[List[float]]]:  # 类型注�
     #3 并发：多线程同时发多个批次（EMBED_CONCURRENCY），大幅提速 full reindex"""
     if not EMBED_ENABLED:
         return [None] * len(texts)
-    out = [None] * len(texts)
+    out: List[Optional[List[float]]] = [None] * len(texts)
     any_fail = False
 
     def _work(start: int):
@@ -309,7 +309,7 @@ def rerank(query: str, documents: List[str]) -> Optional[List[int]]:
         body = {"model": RERANK_MODEL, "query": query, "documents": documents}
         url = RERANK_URL or (RERANK_BASE_URL.rstrip("/") + "/rerank")
     else:  # dashscope 原生
-        body = {"model": RERANK_MODEL, "input": {"query": query, "documents": documents},
+        body: dict = {"model": RERANK_MODEL, "input": {"query": query, "documents": documents},
                 "parameters": {"top_n": len(documents)}}
     try:
         req = urllib.request.Request(url, data=json.dumps(body).encode(),
@@ -404,6 +404,7 @@ def make_snippet(text: str, terms: list, radius: int = SNIPPET_RADIUS) -> str:
             best_idx, best_term = idx, term
     if best_idx < 0:
         return body[:150].replace("\n", " ") + "…"
+    assert best_term is not None
     start = max(0, best_idx - radius); end = min(len(body), best_idx + len(best_term) + radius)
     seg = body[start:end].replace("\n", " ")
     seg = _highlight(seg, terms)  # 优化：段内所有命中词高亮（不只定位词）
@@ -515,7 +516,7 @@ def _search_table(db, table: str, query: str, limit: int):
     if table not in ALLOWED_TABLES:
         raise ValueError(f"Invalid table: {table}")
     jtable = table + "_jieba"
-    results = {}
+    results: dict = {}
     def add(k, norm, kind):
         if k not in results or norm > results[k][0]:
             results[k] = (norm, kind)
@@ -784,7 +785,7 @@ def reindex(full: bool = False) -> dict:
                         db.execute("INSERT OR IGNORE INTO attachment_links(page_path,att_path) VALUES(?,?)", (pref, found))
                         links += 1
             # #13 同义词自动学习：从 aliases 学"别名→标题词"映射（全量重建，基于 page_meta）
-            learned = {}
+            learned: dict = {}
             for r in db.execute("SELECT title, aliases FROM page_meta WHERE aliases != ''"):
                 title_words = [w for w in _jieba_cached(r["title"]) if len(w) >= 2] if r["title"] else []
                 if not title_words: continue
@@ -797,7 +798,7 @@ def reindex(full: bool = False) -> dict:
                 try:
                     t = f.read_text(encoding="utf-8", errors="ignore")[:2000]
                     words = [w for w in _jieba_cached(t) if len(w) >= 2 and w not in STOPWORDS]
-                    cnt = {}
+                    cnt: dict = {}
                     for w in words: cnt[w] = cnt.get(w, 0) + 1
                     top = [w for w, _ in sorted(cnt.items(), key=lambda kv: -kv[1])[:5]]
                     tw = [w for w in _jieba_cached(r["title"]) if len(w) >= 2]
@@ -973,7 +974,7 @@ def search(query: str, limit: int = 10, page_type: str = "", tags: str = "",
                     "on" if (mode in ("hybrid", "semantic") and RERANK_ENABLED) else "off")
     # #11 结果聚合（group_by="dir" 按顶层目录分组）
     if group_by == "dir" and out:
-        groups = {}
+        groups: dict = {}
         for o in out:
             top = o["path"].split("/")[0] if "/" in o["path"] else "(根)"
             groups.setdefault(top, []).append(o["path"])
@@ -1137,7 +1138,7 @@ def status() -> dict:
         now_ts = time.time()
         pages_30d = db.execute("SELECT count(*) c FROM page_meta WHERE updated >= ?",
                                (now_ts - 30 * 86400,)).fetchone()["c"]
-        by_month = {}
+        by_month: dict = {}
         for r in db.execute("SELECT updated FROM page_meta"):
             try:
                 k = _dt.datetime.fromtimestamp(r["updated"]).strftime("%Y-%m")
@@ -1145,18 +1146,18 @@ def status() -> dict:
             except (ValueError, OSError, OverflowError):
                 pass
         by_month = dict(sorted(by_month.items()))  # 月份有序
-        top_tags = {}
+        top_tags: dict = {}
         for r in db.execute("SELECT tags FROM page_meta WHERE tags != ''"):
             for t in re.split(r"[,，\s]+", r["tags"] or ""):
                 if t: top_tags[t] = top_tags.get(t, 0) + 1
-        top_tags = sorted(top_tags.items(), key=lambda kv: -kv[1])[:10]
+        top_tags_sorted = sorted(top_tags.items(), key=lambda kv: -kv[1])[:10]
         return {"total_pages": total, "total_attachments": atts, "links": links,
                 "by_type": by_type, "last_reindex": get_meta(db, "last_reindex", "never"),
                 "schema_version": get_meta(db, "schema_version", "?"),
                 "embed_model": get_meta(db, "embed_model", "") or (EMBED_MODEL if EMBED_ENABLED else "未配置"),
                 "rerank_model": get_meta(db, "rerank_model", "") or (RERANK_MODEL if RERANK_ENABLED else "未配置"),
                 "vec_indexed": vec_count, "embed_tokens_used": get_meta(db, "embed_tokens_used", 0),
-                "pages_30d": pages_30d, "pages_by_month": by_month, "top_tags": dict(top_tags),
+                "pages_30d": pages_30d, "pages_by_month": by_month, "top_tags": dict(top_tags_sorted),
                 "db": str(DB_PATH), "vault_root": str(VAULT_ROOT)}
 
 @mcp.tool()
