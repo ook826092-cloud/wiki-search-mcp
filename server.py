@@ -342,25 +342,25 @@ def parse_frontmatter(text: str):
     m = re.match(r"^---\r?\n(.*?)\r?\n---", text, re.S)
     if m:
         fm = m.group(1)
-        t = re.search(r"^title:\s*[\"']?(.*?)[\"']?\s*$", fm, re.M)
-        if t: title = t.group(1).strip()
+        t = re.search(r"^title:[ \t]*[\"']?(.*?)[\"']?[ \t]*$", fm, re.M)
+        if t and t.group(1).strip(): title = t.group(1).strip()
         else:
-            tm = re.search(r"^title:\s*\|?\s*\r?\n((?:\s{2,}.*(?:\r?\n)?)+)", fm, re.M)
+            tm = re.search(r"^title:[ \t]*\|?[ \t]*\r?\n((?:[ \t]{2,}.*(?:\r?\n)?)+)", fm, re.M)
             if tm: title = " ".join(l.strip() for l in tm.group(1).splitlines() if l.strip())
-        p = re.search(r"^type:\s*(\w+)", fm, re.M)
+        p = re.search(r"^type:[ \t]*(\w+)", fm, re.M)
         if p: ptype = p.group(1)
-        g = re.search(r"^tags:\s*\[(.*?)\]", fm, re.M)
+        g = re.search(r"^tags:[ \t]*\[(.*?)\]", fm, re.M)
         if g: tags = g.group(1)
         else:
-            gm = re.search(r"^tags:\s*[\"']?(.*?)[\"']?\s*$", fm, re.M)
-            if gm: tags = gm.group(1)
+            gm = re.search(r"^tags:[ \t]*[\"']?(.*?)[\"']?[ \t]*$", fm, re.M)
+            if gm and gm.group(1).strip(): tags = gm.group(1)
             else:
-                gl = re.findall(r"^tags:.*\r?\n((?:\s+-\s*\S+.*(?:\r?\n)?)+)", fm, re.M)
+                gl = re.findall(r"^tags:.*\r?\n((?:[ \t]+-\s*\S+.*(?:\r?\n)?)+)", fm, re.M)
                 if gl: tags = " ".join(re.findall(r"-\s*(\S+)", gl[0]))
         a = re.search(r"^aliases:\s*\[(.*?)\]", fm, re.M)
         if a: aliases = a.group(1)
         else:
-            al = re.findall(r"^aliases:.*\r?\n((?:\s+-\s*\S+.*(?:\r?\n)?)+)", fm, re.M)
+            al = re.findall(r"^aliases:.*\r?\n((?:[ \t]+-\s*\S+.*(?:\r?\n)?)+)", fm, re.M)
             if al: aliases = " ".join(re.findall(r"-\s*(\S+)", al[0]))
     return title, ptype, tags, aliases
 
