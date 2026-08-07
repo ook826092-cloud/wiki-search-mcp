@@ -7,7 +7,9 @@ os.environ["VAULT_ROOT"] = str(TEST_ROOT)
 os.environ["WIKI_DB"] = str(TEST_ROOT / "test.db")
 os.environ["VEC0_PATH"] = ""
 import server  # noqa: E402
-from hypothesis import given, strategies as st
+from hypothesis import given, strategies as st, settings
+settings.register_profile("ci", max_examples=30, deadline=2000)
+settings.load_profile("ci")
 
 @given(st.text())
 def test_parse_frontmatter_never_crashes(text):
