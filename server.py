@@ -305,11 +305,12 @@ def rerank(query: str, documents: List[str]) -> Optional[List[int]]:
     # 格式自动判断：URL 以 /rerank 结尾（OpenAI 兼容）时强制 openai，避免 dashscope URL 误判
     fmt = "openai" if (RERANK_URL and RERANK_URL.rstrip("/").endswith("/rerank")) else RERANK_FORMAT
     url = RERANK_URL or (RERANK_BASE_URL.rstrip("/") + "/api/v1/services/rerank/text-rerank/text-rerank")
+    body: dict
     if fmt == "openai":
         body = {"model": RERANK_MODEL, "query": query, "documents": documents}
         url = RERANK_URL or (RERANK_BASE_URL.rstrip("/") + "/rerank")
     else:  # dashscope 原生
-        body: dict = {"model": RERANK_MODEL, "input": {"query": query, "documents": documents},
+        body = {"model": RERANK_MODEL, "input": {"query": query, "documents": documents},
                 "parameters": {"top_n": len(documents)}}
     try:
         req = urllib.request.Request(url, data=json.dumps(body).encode(),
@@ -1196,7 +1197,7 @@ def related(path: str, limit: int = 5) -> list:
     words = [w for w in _jieba_cached(text) if len(w) >= 2 and w not in STOPWORDS]
     top = sorted(set(words), key=lambda w: -words.count(w))[:10]
     with closing(get_db()) as db:
-        scores = {}
+        scores: dict = {}
         # 关键词重叠
         for w in top:
             try:
