@@ -1,9 +1,9 @@
-name: mutation
+name: 变异测试
 on:
   workflow_dispatch:
 
 jobs:
-  mutate:
+  变异执行:
     runs-on: ubuntu-latest
     timeout-minutes: 300
     steps:
@@ -12,7 +12,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install mutmut pytest jieba fastmcp hypothesis httpx
-      - name: Run mutation testing
+      - name: 运行变异测试
         run: mutmut run
-      - name: Show results
+      - name: 显示结果
         run: mutmut results
