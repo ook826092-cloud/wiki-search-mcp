@@ -1,0 +1,26 @@
+name: mutation-tests
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  mutate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install deps
+        run: pip install mutmut pytest jieba fastmcp hypothesis httpx
+      - name: Run mutation testing
+        run: |
+          mutmut run --paths-to-mutate=server.py --runner "python -m pytest test_server.py test_fault.py test_hypothesis.py -x -q" 2>&1 | tail -5
+      - name: Show results
+        run: |
+          echo "== 变异点统计 =="
+          mutmut results 2>/dev/null | tail -3
+          echo "== 未杀死的变异（幸存者）=="
+          mutmut results 2>/dev/null | grep -E "^[0-9]+ survived" | head -5 || true
