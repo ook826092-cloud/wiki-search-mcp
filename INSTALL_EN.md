@@ -149,7 +149,29 @@ fastmcp call http://127.0.0.1:8181/mcp lint path=wiki
 
 ---
 
-## 8. FAQ
+## 8. Install onnxruntime on Termux (optional, from Release)
+
+Document conversion (markitdown) needs onnxruntime (for magika file-type detection). **Termux users can download directly from Release** (built via official termux-packages flow, same source as Termux repo, permanent):
+
+```bash
+# 1. Download two debs
+# Option A: gh CLI
+gh release download onnxruntime-termux-1.28.0 -R ook826092-cloud/wheel-forge
+# Option B: curl
+curl -L -o onnx.deb https://github.com/ook826092-cloud/wheel-forge/releases/download/onnxruntime-termux-1.28.0/onnxruntime_1.28.0_aarch64.deb
+curl -L -o python-onnx.deb https://github.com/ook826092-cloud/wheel-forge/releases/download/onnxruntime-termux-1.28.0/python-onnxruntime_1.28.0_aarch64.deb
+
+# 2. Install
+dpkg -i onnxruntime_1.28.0_aarch64.deb python-onnxruntime_1.28.0_aarch64.deb
+
+# 3. Verify
+python3 -c "import onnxruntime; print(onnxruntime.__version__)"
+```
+
+> Release: https://github.com/ook826092-cloud/wheel-forge/releases/tag/onnxruntime-termux-1.28.0
+> Artifacts: onnxruntime (C++ lib 4.7MB) + python-onnxruntime (bindings 5.5MB), aarch64/bionic
+
+## 9. FAQ
 
 ### Q1: Semantic search not working?
 - Check `status` `vec_indexed` (>0 required)
@@ -171,7 +193,7 @@ fastmcp call http://127.0.0.1:8181/mcp lint path=wiki
 
 ---
 
-## 9. Uninstall
+## 10. Uninstall
 
 ```bash
 pkill -f "fastmcp run server.py"

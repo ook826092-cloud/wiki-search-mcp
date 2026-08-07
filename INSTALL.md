@@ -149,7 +149,29 @@ fastmcp call http://127.0.0.1:8181/mcp lint path=wiki
 
 ---
 
-## 8. 常见问题
+## 8. Termux 安装 onnxruntime（可选，从 Release 下载）
+
+文档转换（markitdown）依赖 onnxruntime（magika 文件类型检测用）。**Termux 用户直接从 Release 下载安装**（termux-packages 官方构建，与 Termux 仓库同源，永久有效）：
+
+```bash
+# 1. 下载两个 deb
+# 方式 A：gh CLI
+gh release download onnxruntime-termux-1.28.0 -R ook826092-cloud/wheel-forge
+# 方式 B：curl
+curl -L -o onnx.deb https://github.com/ook826092-cloud/wheel-forge/releases/download/onnxruntime-termux-1.28.0/onnxruntime_1.28.0_aarch64.deb
+curl -L -o python-onnx.deb https://github.com/ook826092-cloud/wheel-forge/releases/download/onnxruntime-termux-1.28.0/python-onnxruntime_1.28.0_aarch64.deb
+
+# 2. 安装
+dpkg -i onnxruntime_1.28.0_aarch64.deb python-onnxruntime_1.28.0_aarch64.deb
+
+# 3. 验证
+python3 -c "import onnxruntime; print(onnxruntime.__version__)"
+```
+
+> Release 地址：https://github.com/ook826092-cloud/wheel-forge/releases/tag/onnxruntime-termux-1.28.0
+> 产物：onnxruntime（C++ 库 4.7MB）+ python-onnxruntime（绑定 5.5MB），aarch64/bionic
+
+## 9. 常见问题
 
 ### Q1: 语义检索无效？
 - 检查 `status` 的 `vec_indexed`（>0 才有语义）
@@ -171,7 +193,7 @@ fastmcp call http://127.0.0.1:8181/mcp lint path=wiki
 
 ---
 
-## 9. 卸载
+## 10. 卸载
 
 ```bash
 pkill -f "fastmcp run server.py"
