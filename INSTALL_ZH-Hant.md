@@ -158,8 +158,8 @@ fastmcp call http://127.0.0.1:8181/mcp lint path=wiki
 # 方式 A：gh CLI
 gh release download onnxruntime-termux-1.28.0 -R ook826092-cloud/wheel-forge
 # 方式 B：curl
-curl -L -o onnx.deb https://github.com/ook826092-cloud/wheel-forge/releases/download/onnxruntime-termux-1.28.0/onnxruntime_1.28.0_aarch64.deb
-curl -L -o python-onnx.deb https://github.com/ook826092-cloud/wheel-forge/releases/download/onnxruntime-termux-1.28.0/python-onnxruntime_1.28.0_aarch64.deb
+curl -L -o onnx.deb https://github.com/ook826092-cloud/wheel-forge/releases/latest/download/onnxruntime_1.28.0_aarch64.deb
+curl -L -o python-onnx.deb https://github.com/ook826092-cloud/wheel-forge/releases/latest/download/python-onnxruntime_1.28.0_aarch64.deb
 
 # 2. 安裝
 dpkg -i onnxruntime_1.28.0_aarch64.deb python-onnxruntime_1.28.0_aarch64.deb
@@ -168,7 +168,7 @@ dpkg -i onnxruntime_1.28.0_aarch64.deb python-onnxruntime_1.28.0_aarch64.deb
 python3 -c "import onnxruntime; print(onnxruntime.__version__)"
 ```
 
-> Release 位址：https://github.com/ook826092-cloud/wheel-forge/releases/tag/onnxruntime-termux-1.28.0
+> Release 位址：https://github.com/ook826092-cloud/wheel-forge/releases/latest
 > 產物：onnxruntime（C++ 函式庫 4.7MB）+ python-onnxruntime（綁定 5.5MB），aarch64/bionic
 
 ## 9. 常見問題
