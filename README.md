@@ -1,3 +1,7 @@
+**🌐 Language**: [中文](README.md) · [English](README_EN.md) · [繁體中文](README_ZH-Hant.md)
+
+---
+
 # wiki-search MCP Server
 
 **SQLite FTS5 关键词 + 向量语义 混合检索 MCP Server** —— 为 Obsidian 知识库提供毫秒级检索与素材处理能力。
