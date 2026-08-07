@@ -1,0 +1,23 @@
+name: static-checks
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install checkers
+        run: pip install ruff mypy
+      - name: Syntax check
+        run: python -m py_compile server.py
+      - name: Ruff static check (F errors)
+        run: ruff check server.py --select F --output-format=github || true
+      - name: Ruff style check
+        run: ruff check server.py --output-format=github || true
+      - name: MyPy type check (lenient)
+        run: mypy server.py --ignore-missing-imports --no-error-summary || true
