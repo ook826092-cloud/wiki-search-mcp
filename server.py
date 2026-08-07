@@ -260,7 +260,7 @@ def embed_texts(texts: List[str]) -> List[Optional[List[float]]]:  # 类型注�
                     EMBED_BASE_URL.rstrip("/") + "/embeddings",
                     data=body, headers={"Authorization": "Bearer " + EMBED_API_KEY,
                                         "Content-Type": "application/json"})
-                d = json.loads(urllib.request.urlopen(req, timeout=20).read())  # nosec B310
+                d = json.loads(urllib.request.urlopen(req, timeout=20).read()) # nosec B310
                 batch_vecs = [x["embedding"] for x in d["data"]]
                 if len(batch_vecs) != len(batch):  # 数量防御：异常 provider 返回数不匹配
                     logger.warning("嵌入返回数量 %d != 请求 %d，视为失败", len(batch_vecs), len(batch))
@@ -315,7 +315,7 @@ def rerank(query: str, documents: List[str]) -> Optional[List[int]]:
     try:
         req = urllib.request.Request(url, data=json.dumps(body).encode(),
             headers={"Authorization": "Bearer " + RERANK_API_KEY, "Content-Type": "application/json"})
-        d = json.loads(urllib.request.urlopen(req, timeout=30).read())  # 重排超时收紧  # nosec B310
+        d = json.loads(urllib.request.urlopen(req, timeout=30).read())  # 重排超时收紧 # nosec B310
         if fmt == "openai":  # 用 fmt（URL 自动判断后的格式），而非原始 RERANK_FORMAT
             results = d.get("results", [])
         else:
@@ -405,7 +405,7 @@ def make_snippet(text: str, terms: list, radius: int = SNIPPET_RADIUS) -> str:
             best_idx, best_term = idx, term
     if best_idx < 0:
         return body[:150].replace("\n", " ") + "…"
-    assert best_term is not None
+    assert best_term is not None # nosec B101
     start = max(0, best_idx - radius); end = min(len(body), best_idx + len(best_term) + radius)
     seg = body[start:end].replace("\n", " ")
     seg = _highlight(seg, terms)  # 优化：段内所有命中词高亮（不只定位词）
@@ -532,7 +532,7 @@ def _search_table(db, table: str, query: str, limit: int):
                                    (" OR ".join('"%s"' % w for w in terms), 5.0, "jieba_or")):
             try:
                 rows = db.execute(
-                    f"SELECT path, bm25({jtable}, {BM25_WEIGHTS[jtable]}) AS rank FROM {jtable} "  # nosec B608
+                    f"SELECT path, bm25({jtable}, {BM25_WEIGHTS[jtable]}) AS rank FROM {jtable} " # nosec B608
                     f"WHERE {jtable} MATCH ? ORDER BY rank LIMIT ?",
                     (expr, limit * FTS_LIMIT_MULT))
                 for row in rows:
@@ -544,7 +544,7 @@ def _search_table(db, table: str, query: str, limit: int):
         expr = " OR ".join('"%s"' % t.replace('"', "") for t in fts_terms)  # 过滤引号防 FTS 语法错误
         try:
             rows = db.execute(
-                f"SELECT path, bm25({table}, {BM25_WEIGHTS[table]}) AS rank FROM {table} "  # nosec B608
+                f"SELECT path, bm25({table}, {BM25_WEIGHTS[table]}) AS rank FROM {table} " # nosec B608
                 f"WHERE {table} MATCH ? ORDER BY rank LIMIT ?",
                 (expr, limit * FTS_LIMIT_MULT))
             for row in rows:
@@ -605,7 +605,7 @@ def _rerank_paths(query: str, paths: List[str]) -> List[str]:
             with f.open("r", encoding="utf-8", errors="ignore") as fh:  # 只读前 500 字符，不全量加载
                 docs.append(fh.read(500))
             valid.append(p)
-        except Exception:  # nosec B110
+        except Exception: # nosec B110
             pass
     if not valid: return paths
     order = rerank(query, docs)
@@ -636,7 +636,7 @@ def reindex(full: bool = False) -> dict:
                 db.execute("DROP TABLE IF EXISTS pages_vec")  # 无条件清残留（即使嵌入当前禁用）
                 init_schema(db)
                 for t in ("page_meta", "attachments", "attachment_links"):
-                    db.execute(f"DELETE FROM {t}")  # nosec B608
+                    db.execute(f"DELETE FROM {t}") # nosec B608
                 db.execute("DELETE FROM meta WHERE key IN ('page_mtimes','att_mtimes')")
                 page_mtimes, att_mtimes = {}, {}
             # --- 页面 ---
@@ -712,7 +712,7 @@ def reindex(full: bool = False) -> dict:
             try:
                 from markitdown import MarkItDown
                 _md = MarkItDown()  # 实例化提到循环外
-            except Exception:  # nosec B110
+            except Exception: # nosec B110
                 pass
             for f in VAULT_ROOT.rglob("*"):
                 if not f.is_file() or f.suffix.lower() not in ATTACH_EXTS: continue
@@ -805,7 +805,7 @@ def reindex(full: bool = False) -> dict:
                     tw = [w for w in _jieba_cached(r["title"]) if len(w) >= 2]
                     if tw and top:
                         learned.setdefault(" ".join(tw), " ".join(top))
-                except Exception:  # nosec B110
+                except Exception: # nosec B110
                     pass
             set_meta(db, "page_mtimes", {str(k): v for k, v in page_mtimes.items()})
             set_meta(db, "att_mtimes", {str(k): v for k, v in att_mtimes.items()})
@@ -1110,7 +1110,7 @@ def list_pages(page_type: str = "", tags: str = "") -> list:
         # 标签集合精确匹配（与 search 语义一致）
         if pt_list:
             ph = ",".join("?" * len(pt_list))
-            rows = db.execute(f"SELECT path,title,page_type,tags FROM page_meta WHERE page_type IN ({ph}) ORDER BY path", pt_list)  # nosec B608
+            rows = db.execute(f"SELECT path,title,page_type,tags FROM page_meta WHERE page_type IN ({ph}) ORDER BY path", pt_list) # nosec B608
         else:
             rows = db.execute("SELECT path,title,page_type,tags FROM page_meta ORDER BY path")
         out = []
@@ -1166,13 +1166,13 @@ def fetch_url(url: str, max_chars: int = 20000) -> dict:
     """抓取网页 URL → markdown。返回 {"content": 文本} 或 {"error": 原因}。
     参数: url=http/https 链接(必填); max_chars=返回最大字符数(默认20000)"""
     max_chars = max(1, max_chars)  # 参数校验
-    import subprocess, shutil  # nosec B404
+    import subprocess, shutil # nosec B404
     if not shutil.which("defuddle"):  # 建议20: 前置检查（比 FileNotFoundError 更友好）
         return {"error": "defuddle 未安装（npm install -g defuddle，需 Node.js）"}
     if not url.startswith(("http://", "https://")):
         return {"error": "INVALID URL: 仅支持 http/https 链接"}
     try:
-        r = subprocess.run(["defuddle", "parse", url, "--md"],  # nosec B603 B607
+        r = subprocess.run(["defuddle", "parse", url, "--md"], # nosec B607 B603
                            capture_output=True, text=True, timeout=60)
         if r.returncode != 0:
             return {"error": "抓取失败: " + (r.stderr or r.stdout)[:300]}  # 错误结构化
@@ -1215,7 +1215,7 @@ def related(path: str, limit: int = 5) -> list:
         if refs:
             ph = ",".join("?" * len(refs))
             for r in db.execute(
-                    f"SELECT DISTINCT page_path FROM attachment_links WHERE att_path IN ({ph}) AND page_path != ?",  # nosec B608
+                    f"SELECT DISTINCT page_path FROM attachment_links WHERE att_path IN ({ph}) AND page_path != ?", # nosec B608
                     refs + [rel]):
                 scores[r["page_path"]] = scores.get(r["page_path"], 0) + 3
         out = []
@@ -1287,7 +1287,7 @@ def lint(path: str = "wiki", limit: int = 100) -> dict:
                             r = db.execute("SELECT path FROM attachments WHERE filename LIKE ? ESCAPE '\\' LIMIT 1",
                                            (f"%{name_esc}%",)).fetchone()
                             if r: sug = r["path"]
-                    except Exception:  # nosec B110
+                    except Exception: # nosec B110
                         pass
                     broken.append({"page": rel, "link": target,
                                    "suggest": str(sug)})  # str() 转换防 Path 不可序列化
