@@ -1,0 +1,17 @@
+# 敏感/本地配置（含 API key，勿提交）
+start.sh
+*.log
+wiki.db
+wiki.db-*
+
+# 本地测试脚本（含测试逻辑）
+test_*.py
+backup.sh
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# 环境
+.env
