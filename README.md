@@ -38,6 +38,11 @@
 | 网页抓取 | Defuddle CLI |
 | 协议 | MCP（Streamable HTTP） |
 
+## 📖 安装教程
+
+> 🖱️ **[点击这里查看完整安装教程 → INSTALL.md](INSTALL.md)**
+> 涵盖：环境要求 / 依赖安装（含 Termux 专项）/ 配置 / 启动 / 客户端连接 / 首次使用 / 常见问题
+
 ## 🚀 快速开始
 
 ```bash
