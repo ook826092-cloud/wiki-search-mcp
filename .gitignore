@@ -4,8 +4,9 @@ start.sh
 wiki.db
 wiki.db-*
 
-# 本地测试脚本（含测试逻辑）
-test_*.py
+# 本地测试脚本（含测试逻辑，不进仓库）
+test_db.py
+test_embed.py
 backup.sh
 
 # Python
