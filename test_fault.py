@@ -34,6 +34,7 @@ def test_bad_frontmatter():
 def test_embed_disabled_degrade():
     """嵌入禁用时 search 正常（关键词路径）"""
     (TEST_ROOT / "ok.md").write_text("---\ntitle: 收藏夹\ntype: concept\n---\n收藏夹管理方法", encoding="utf-8")
+    server.reindex(full=True)  # 先索引再搜（测试独立，不依赖前序副作用）
     r = server.search(query="收藏夹", mode="hybrid", limit=5)
     assert r["total"] >= 1
 
