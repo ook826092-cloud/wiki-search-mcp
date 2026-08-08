@@ -639,9 +639,40 @@ def reindex(full: bool = False) -> dict:
                     db.execute(f"DELETE FROM {t}") # nosec B608
                 db.execute("DELETE FROM meta WHERE key IN ('page_mtimes','att_mtimes')")
                 page_mtimes, att_mtimes = {}, {}
-            # --- 页面 ---
+            # --- 页面（企业级分批 flush：每 5000 页 commit，支持百万量级）---
             pages_upd = 0
             pages_data, meta_data = [], []
+            REINDEX_FLUSH = 5000
+
+            def _flush_pages_batch():
+                nonlocal pages_data, meta_data
+                if not pages_data:
+                    return
+                # 增量前先 DELETE（防 FTS5 重复记录）
+                for rel, *_ in pages_data:
+                    try: db.execute("DELETE FROM pages_fts WHERE path=?", (rel,))
+                    except sqlite3.Error: pass
+                    db.execute("DELETE FROM pages_fts_jieba WHERE path=?", (rel,))
+                if ENABLE_TRIGRAM:
+                    db.executemany("INSERT INTO pages_fts(path,title,body,tags) VALUES(?,?,?,?)", pages_data)
+                db.executemany("INSERT INTO pages_fts_jieba(path,title,body,tags) VALUES(?,?,?,?)",
+                               [(rel, _jieba_seg(title), _jieba_seg(text) + (" " + aliases.replace(",", " ") if aliases else ""), tags)
+                                for rel, title, text, tags in pages_data])
+                db.executemany("INSERT OR REPLACE INTO page_meta(path,title,page_type,tags,aliases,size,updated) VALUES(?,?,?,?,?,?,?)", meta_data)
+                if EMBED_ENABLED and pages_data:
+                    try:
+                        texts = [text[:800] for _, _, text, _ in pages_data]
+                        vecs = embed_texts(texts)  # 等长，失败位 None
+                        for i, (rel, _, _, _) in enumerate(pages_data):
+                            v = vecs[i] if i < len(vecs) else None
+                            db.execute("DELETE FROM pages_vec WHERE path=?", (rel,))
+                            if v is not None:
+                                db.execute("INSERT OR REPLACE INTO pages_vec(path,embedding) VALUES(?,?)", (rel, json.dumps(v)))
+                    except Exception as e:
+                        logger.warning("向量化分批失败（跳过该批）: %s", e)
+                db.commit()
+                pages_data, meta_data = [], []
+
             for f in WIKI_ROOT.rglob("*.md"):
                 try: st = f.stat()
                 except OSError: continue
@@ -658,6 +689,8 @@ def reindex(full: bool = False) -> dict:
                 pages_data.append((rel, title, text, tags))
                 meta_data.append((rel, title, ptype or "note", tags, aliases, st.st_size, mt))
                 page_mtimes[rel] = mt; pages_upd += 1; updated_pages.add(rel)
+                if len(pages_data) >= REINDEX_FLUSH:
+                    _flush_pages_batch()
             for rel in (k for k in page_mtimes if not (WIKI_ROOT / k).exists()):  # 生成器省内存
                 try: db.execute("DELETE FROM pages_fts WHERE path=?", (rel,))
                 except sqlite3.Error: pass
@@ -668,35 +701,7 @@ def reindex(full: bool = False) -> dict:
                     try: db.execute("DELETE FROM pages_vec WHERE path=?", (rel,))
                     except sqlite3.Error: pass
                 page_mtimes.pop(rel); updated_pages.discard(rel)
-            if pages_data:
-                # 增量前先 DELETE（防 FTS5 重复记录）
-                for rel, *_ in pages_data:
-                    try: db.execute("DELETE FROM pages_fts WHERE path=?", (rel,))
-                    except sqlite3.Error: pass
-                    db.execute("DELETE FROM pages_fts_jieba WHERE path=?", (rel,))
-                if ENABLE_TRIGRAM:
-                    db.executemany("INSERT INTO pages_fts(path,title,body,tags) VALUES(?,?,?,?)", pages_data)
-                db.executemany("INSERT INTO pages_fts_jieba(path,title,body,tags) VALUES(?,?,?,?)",
-                               [(rel, _jieba_seg(title), _jieba_seg(text) + (" " + aliases.replace(",", " ") if aliases else ""), tags)
-                                for rel, title, text, tags in pages_data])
-                db.executemany("INSERT OR REPLACE INTO page_meta(path,title,page_type,tags,aliases,size,updated) VALUES(?,?,?,?,?,?,?)", meta_data)
-                # 向量化（嵌入配置启用时）
-                if EMBED_ENABLED and pages_data:
-                    try:
-                        texts = [text[:800] for _, _, text, _ in pages_data]
-                        vecs = embed_texts(texts)  # 等长，失败位 None
-                        for i, (rel, _, _, _) in enumerate(pages_data):
-                            v = vecs[i] if i < len(vecs) else None
-                            # 先 DELETE 再 INSERT（防 vec0 无唯一约束重复行）
-                            db.execute("DELETE FROM pages_vec WHERE path=?", (rel,))
-                            if v is not None:
-                                db.execute(
-                                    "INSERT INTO pages_vec(path, embedding) VALUES(?, ?)",
-                                    (rel, json.dumps(v)))
-                                embedded.add(rel)
-                        logger.info("已向量化 %d/%d 页", len(embedded), len(pages_data))
-                    except Exception as e:
-                        logger.exception("向量化异常: %s", e)
+            _flush_pages_batch()  # 尾部剩余批次（不足 5000 页的）
             # --- 附件 ---
             atts_upd = 0
             atts_data, atts_fts_data, atts_content = [], [], []

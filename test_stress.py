@@ -49,7 +49,7 @@ def test_concurrency_256():
     def worker(i):
         try:
             for _ in range(5):
-                r = server.search(query=f"页面{i % 100000}", limit=5)
+                r = server.search(query=f"页面{i % 1000000}", limit=5)
                 assert "results" in r
         except Exception as e:
             errs.append(e)
@@ -60,7 +60,7 @@ def test_concurrency_256():
 
 def test_huge_page_50mb():
     """🏆 50MB 巨页：reindex 不崩"""
-    (TEST_ROOT / "huge.md").write_text("---\ntitle: 巨页\n---\n" + "内容" * 171000000, encoding="utf-8")
+    (TEST_ROOT / "huge.md").write_text("---\ntitle: 巨页\n---\n" + "内容" * 25000000, encoding="utf-8")
     server.reindex(full=True)
     r = server.search(query="巨页", limit=3)
     assert r["total"] >= 1
