@@ -8,6 +8,7 @@ os.environ["WIKI_DB"] = str(TEST_ROOT / "test.db")
 os.environ["VEC0_PATH"] = ""
 os.environ["EMBED_BASE_URL"] = ""  # 强制禁用嵌入（零额度消耗）
 os.environ["RERANK_BASE_URL"] = ""
+import re
 import server  # noqa: E402
 from hypothesis import given, strategies as st, settings
 settings.register_profile("ci", max_examples=30, deadline=2000)
@@ -33,7 +34,11 @@ def test_query_nature_valid(q):
 @given(st.text())
 def test_cjk_chunks_preserves(s):
     chunks = server.cjk_chunks(s)
-    assert "".join(chunks) == s
+    # cjk_chunks 只提取东亚字符连续块（非东亚字符丢弃）——断言拼接 = s 的东亚字符子序列
+    expected = re.sub(r'[^\u2E80-\u9FFF\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFFEF'
+                      r'\u3040-\u309F\u30A0-\u30FF\u31F0-\u31FF\uAC00-\uD7AF\u3400-\u4DBF'
+                      r'\U00020000-\U0002FFFF\U00030000-\U0003FFFF]', '', s)
+    assert "".join(chunks) == expected
 
 @given(st.text(max_size=200), st.lists(st.text(max_size=10), max_size=5))
 def test_make_snippet_no_crash(body, terms):
