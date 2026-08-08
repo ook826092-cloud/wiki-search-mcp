@@ -10,18 +10,18 @@ os.environ["EMBED_BASE_URL"] = ""
 os.environ["RERANK_BASE_URL"] = ""
 import server  # noqa: E402
 
-def test_bulk_reindex_100_pages():
-    """海量：100 页全量索引 → 全部可检索"""
-    for i in range(100):
-        (TEST_ROOT / f"p{i:03}.md").write_text(
-            f"---\ntitle: 页面{i}\ntype: concept\ntags: [压力]\n---\n压力测试内容 {i} 号收藏夹管理",
+def test_bulk_reindex_5000_pages():
+    """海量：5000 页全量索引 → 全部可检索（真极限）"""
+    for i in range(5000):
+        (TEST_ROOT / f"p{i:04}.md").write_text(
+            f"---\ntitle: 页面{i}\ntype: concept\ntags: [压力]\n---\n压力测试内容 {i} 号收藏夹管理方法",
             encoding="utf-8")
     server.reindex(full=True)
     db = server.get_db()
     n = db.execute("SELECT count(*) c FROM page_meta").fetchone()["c"]
-    assert n >= 100, f"只索引到 {n} 页"
+    assert n >= 5000, f"只索引到 {n} 页"
     r = server.search(query="收藏夹", limit=50)
-    assert r["total"] >= 100
+    assert r["total"] >= 5000, f"只搜到 {r['total']}"
     db.close()
 
 def test_reindex_idempotent():
@@ -39,18 +39,18 @@ def test_concurrent_search():
     def worker(i):
         try:
             for _ in range(10):
-                r = server.search(query=f"页面{i % 100}", limit=5)
+                r = server.search(query=f"页面{i % 5000}", limit=5)
                 assert "results" in r
         except Exception as e:
             errs.append(e)
-    ts = [threading.Thread(target=worker, args=(i,)) for i in range(8)]
+    ts = [threading.Thread(target=worker, args=(i,)) for i in range(32)]
     [t.start() for t in ts]
     [t.join() for t in ts]
     assert not errs, f"并发异常: {errs[:3]}"
 
 def test_huge_page_1mb():
     """超大：1MB 页面不崩"""
-    (TEST_ROOT / "huge.md").write_text("---\ntitle: 巨页\n---\n" + "内容" * 350000, encoding="utf-8")
+    (TEST_ROOT / "huge.md").write_text("---\ntitle: 巨页\n---\n" + "内容" * 1750000, encoding="utf-8")
     server.reindex(full=True)
     r = server.search(query="巨页", limit=3)
     assert r["total"] >= 1
@@ -66,7 +66,7 @@ def test_fuzz_queries():
     import random, string
     random.seed(42)
     chars = string.printable + "收藏夹管理B站视频人工智能测试"
-    for _ in range(200):
+    for _ in range(2000):
         q = "".join(random.choice(chars) for _ in range(random.randint(0, 30)))
         r = server.search(query=q, limit=3)
         assert "results" in r
