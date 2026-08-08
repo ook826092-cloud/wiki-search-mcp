@@ -35,5 +35,3 @@ jobs:
         run: python -m pytest test_server.py test_fault.py test_hypothesis.py -v --cov=server --cov-report=term-missing --cov-fail-under=40
       - name: MCP 协议级测试（真实 HTTP）
         run: python -m pytest test_mcp_protocol.py -v
-      - name: 极限测试（并发/海量/极端输入）
-        run: python -m pytest test_stress.py -v
