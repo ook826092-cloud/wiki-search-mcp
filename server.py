@@ -85,7 +85,7 @@ _sync_thread = None  # #2 后台同步线程（懒同步不阻塞查询）
 _embed_lock = threading.Lock()  # 嵌入计数线程锁
 _embed_tokens_used = 0  # 本进程累计嵌入 tokens（每次成功批次落库 meta，防重启丢失）
 
-# 同义词/别名扩展（#5）：搜索时互相补全
+# 同义词/别名扩展：搜索时互相补全
 SYNONYMS = {
     "卡片盒": "Zettelkasten", "Zettelkasten": "卡片盒",
     "知识库": "知识管理", "知识管理": "知识库",
@@ -620,7 +620,8 @@ def _rerank_paths(query: str, paths: List[str]) -> List[str]:
 # ---------- 索引构建 ----------
 @mcp.tool()
 def reindex(full: bool = False) -> dict:
-    """重建索引（含向量化）。默认增量；full=True 全量。嵌入模型按环境变量配置。"""
+    """重建索引。默认增量（只处理变化的文件）；full=True 全量重建（DROP 后重建全部表，含向量化）。""",
+    """嵌入模型按环境变量配置（EMBED_*），未配置时自动跳过向量化。"""
     if not WIKI_ROOT.exists():  # 手动调用时目录缺失不崩溃
         return {"error": "WIKI_ROOT 不存在: " + str(WIKI_ROOT)}
     with closing(get_db()) as db:
@@ -879,9 +880,11 @@ def _resolve_attachment(db, page_file: Path, ref: str) -> Optional[str]:
 @mcp.tool()
 def search(query: str, limit: int = 10, page_type: str = "", tags: str = "",
            mode: str = "hybrid", since: str = "", group_by: str = "") -> dict:
-    """检索笔记。mode: hybrid(默认,关键词+语义RRF融合) / keyword / semantic。
-    page_type 支持多值(逗号分隔: "concept,entity")；since=YYYY-MM-DD 只查该日期后更新；
-    group_by="dir" 时按顶层目录聚合返回。返回 {results: [...], total: 总命中数}。"""
+    """混合检索笔记（核心工具）。
+    mode: hybrid(默认, 关键词+向量语义RRF融合) / keyword(纯关键词) / semantic(纯语义)。
+    page_type: 类型过滤，多值逗号分隔（concept,entity）；tags: 标签过滤，多值 AND。
+    since: YYYY-MM-DD 只查该日期后更新；group_by="dir" 按顶层目录聚合。
+    返回 {results: [...], total: 总命中数}。"""
     if not query or not query.strip():  # 建议11: 空查询提前返回
         return {"results": [], "total": 0}
     fts_terms, like_terms = tokenize_query(query)
@@ -889,7 +892,7 @@ def search(query: str, limit: int = 10, page_type: str = "", tags: str = "",
         mode = "hybrid"  # 非法 mode 回退默认
     if mode == "semantic" and not EMBED_ENABLED:
         return {"error": "语义检索需配置 EMBED_BASE_URL/EMBED_API_KEY/EMBED_MODEL 环境变量", "total": 0}
-    # 同义词扩展（#5）：jieba 词级匹配，避免子串误触发（2.9）
+    # 同义词扩展：jieba 词级匹配，避免子串误触发
     query_ext = query
     _qwords = set(_jieba_cached(query))
     for k, v in SYNONYMS.items():
@@ -1008,7 +1011,7 @@ def search(query: str, limit: int = 10, page_type: str = "", tags: str = "",
 
 @mcp.tool()
 def similar(path: str, limit: int = 5) -> list:
-    """语义相似笔记推荐：给一篇笔记，找语义最像的其它笔记（知识探索/复利）。"""
+    """语义相似推荐：基于向量嵌入，找与指定笔记语义最接近的其它笔记（知识探索用）。"""
     limit = max(1, min(limit, 50))  # 参数校验
     if not EMBED_ENABLED:
         return [{"error": "嵌入未配置（EMBED_BASE_URL/KEY/MODEL）"}]
@@ -1033,8 +1036,8 @@ def similar(path: str, limit: int = 5) -> list:
 
 @mcp.tool()
 def get(path: str, max_lines: int = 200, from_line: int = 0) -> str:
-    """读取笔记全文 markdown（AI 精读用）。
-    参数: path=相对 vault 路径(必填); max_lines=最多行数(默认200); from_line=起始行(默认0)"""
+    """读取笔记全文（markdown），用于精读检索命中的笔记。
+    参数: path=笔记相对路径(必填); max_lines=最多行数(默认200); from_line=起始行(默认0)"""
     f = safe_resolve(WIKI_ROOT, path)
     if not f or not f.is_file(): return "INVALID PATH: " + path
     from_line = max(0, from_line)
@@ -1044,8 +1047,8 @@ def get(path: str, max_lines: int = 200, from_line: int = 0) -> str:
 
 @mcp.tool()
 def preview(path: str, max_lines: int = 30) -> str:
-    """快速预览原文件开头（frontmatter + 正文前几行），用于快速判断文件是否相关，轻量省 token。
-    参数: path=相对 vault 路径(必填); max_lines=行数(默认30)"""
+    """快速预览笔记开头（frontmatter + 前几行），用于快速判断相关性，省 token。
+    参数: path=笔记相对路径(必填); max_lines=行数(默认30)"""
     f = safe_resolve(WIKI_ROOT, path)
     if not f or not f.is_file(): return "INVALID PATH: " + path
     max_lines = max(1, min(max_lines, MAX_LINES_HARD))
@@ -1054,13 +1057,13 @@ def preview(path: str, max_lines: int = 30) -> str:
 
 @mcp.tool()
 def search_attachment(query: str, ext: str = "", limit: int = 10) -> list:
-    """检索附件（图片/PDF/音视频等），按文件名/路径检索，返回附件位置和引用它的页面。
+    """检索附件：按文件名/路径/文档内容（PDF/Office 正文）检索，返回附件位置和引用它的页面。
     参数: query=检索词(必填); ext=扩展名过滤如png/pdf(可选); limit=条数(默认10)"""
     limit = max(1, min(limit, 50))  # 参数校验
     with closing(get_db()) as db:
         _maybe_sync(db)
         results = _search_table(db, "attachments_fts", query, limit)
-        # 内容索引补充（#7）：附件正文（PDF/Office 等文档的 markitdown 文本）
+        # 内容索引补充：附件正文（PDF/Office 等文档的 markitdown 文本）
         try:
             words = [w for w in _jieba_cached(query) if len(w) >= 2]
             if words:
@@ -1097,8 +1100,8 @@ def search_attachment(query: str, ext: str = "", limit: int = 10) -> list:
 
 @mcp.tool()
 def get_attachment(path: str) -> dict:
-    """按相对路径取附件线索（实际位置 + Obsidian 链接 + 引用它的页面）。返回结构化数据。
-    参数: path=相对 vault 根的附件路径(必填)"""
+    """获取附件线索：实际位置 + Obsidian 链接 + 引用它的页面（结构化返回）。
+    参数: path=附件相对路径(必填)"""
     f = safe_resolve(VAULT_ROOT, path)
     if not f or not f.is_file(): return {"error": "INVALID PATH: " + path}
     with closing(get_db()) as db:
@@ -1111,8 +1114,8 @@ def get_attachment(path: str) -> dict:
 
 @mcp.tool()
 def page_attachments(path: str) -> list:
-    """列出页面引用的附件清单（附件↔页面双向映射的页面→附件方向）。
-    参数: path=相对 vault 的笔记路径(必填)"""
+    """列出指定笔记引用的附件清单。
+    参数: path=笔记相对路径(必填)"""
     f = safe_resolve(WIKI_ROOT, path)
     if not f or not f.is_file(): return [{"error": "INVALID PATH: " + path}]
     rel = str(f.relative_to(WIKI_ROOT.resolve()))  # f 是 resolve 后路径，root 对齐
@@ -1126,8 +1129,8 @@ def page_attachments(path: str) -> list:
 
 @mcp.tool()
 def list_pages(page_type: str = "", tags: str = "") -> list:
-    """列出索引中的笔记，可按类型/标签过滤（了解知识库全貌）。
-    参数: page_type=类型过滤如concept/entity/note(可选); tags=标签过滤(可选)"""
+    """列出索引中的笔记，可按类型/标签过滤（用于了解知识库全貌）。
+    参数: page_type=类型过滤 concept/entity/note(可选); tags=标签过滤(可选)"""
     with closing(get_db()) as db:
         pt_list = [p.strip() for p in page_type.split(",") if p.strip()] if page_type else []
         tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else []  # tags 多值
@@ -1147,7 +1150,8 @@ def list_pages(page_type: str = "", tags: str = "") -> list:
 
 @mcp.tool()
 def status() -> dict:
-    """索引健康状态：页面数/附件数/引用数/类型分布/嵌入与重排模型/向量数/上次重建时间"""
+    """索引健康状态与统计：页面/附件/引用数、类型分布、嵌入与重排模型、向量数、嵌入 tokens 用量、上次重建时间。""",
+    """监控嵌入额度前先看 embed_tokens_used。"""
     with closing(get_db()) as db:
         total = db.execute("SELECT count(*) c FROM page_meta").fetchone()["c"]
         atts = db.execute("SELECT count(*) c FROM attachments").fetchone()["c"]
@@ -1187,7 +1191,7 @@ def status() -> dict:
 
 @mcp.tool()
 def fetch_url(url: str, max_chars: int = 20000) -> dict:
-    """抓取网页 URL → markdown。返回 {"content": 文本} 或 {"error": 原因}。
+    """抓取网页转 markdown（本地 Defuddle 解析，去广告导航）。返回 {"content": 文本} 或 {"error": 原因}。
     参数: url=http/https 链接(必填); max_chars=返回最大字符数(默认20000)"""
     max_chars = max(1, max_chars)  # 参数校验
     import subprocess, shutil # nosec B404
@@ -1210,8 +1214,8 @@ def fetch_url(url: str, max_chars: int = 20000) -> dict:
 
 @mcp.tool()
 def related(path: str, limit: int = 5) -> list:
-    """相关笔记推荐（#2）：共享引用链接 + 关键词重叠（知识探索，互补 similar 的纯语义）。
-    参数: path=相对 vault 路径(必填); limit=条数(默认5)"""
+    """相关笔记推荐：基于共享引用链接 + 关键词重叠（互补 similar 的纯语义探索）。
+    参数: path=笔记相对路径(必填); limit=条数(默认5)"""
     limit = max(1, min(limit, 50))  # 参数校验
     f = safe_resolve(WIKI_ROOT, path)
     if not f or not f.is_file():
@@ -1251,11 +1255,11 @@ def related(path: str, limit: int = 5) -> list:
 
 @mcp.tool()
 def lint(path: str = "wiki", limit: int = 100) -> dict:
-    """知识库体检（#5）：扫描 [[wikilink]] 指向不存在的页面/附件（断链检测）。
-    智能判定（治本，不依赖手工修内容）：
-    - 精确匹配：vault 根相对路径存在
-    - 模糊匹配：目标文件名在 vault 任意位置存在（如 [[sources/x]] 但实际在 wiki/sources/）
-    - 模板豁免：wiki/Welcome*/欢迎*/schema/（模板示例页占位链接不判链）
+    """知识库体检：扫描 wikilink 断链（指向不存在的页面/附件）。
+    智能判定：
+    - 精确匹配：vault 相对路径存在
+    - 模糊匹配：目标文件名在 vault 任意位置存在（如 [[sources/x]] 实际在 wiki/sources/）
+    - 模板豁免：wiki/Welcome*/欢迎*/schema/ 占位链接不判链
     参数: path=扫描目录(vault 相对, 默认 wiki); limit=最多返回断链数"""
     limit = max(1, min(limit, 500))
     # 安全校验：path 必须在 vault 内（防 ../../etc 目录遍历逃逸）
@@ -1322,8 +1326,8 @@ def lint(path: str = "wiki", limit: int = 100) -> dict:
 
 @mcp.tool()
 def near_duplicates(path: str = "wiki", threshold: float = 0.7, limit: int = 50) -> list:
-    """近似重复检测（#6）：内容高度相似的页面对（lint 去重用）。
-    参数: path=扫描目录(vault 相对, 默认 wiki; 全库较慢); threshold=Jaccard 相似度阈值; limit=最多对数"""
+    """近似重复检测：找出内容高度相似的页面对（Jaccard 相似度，用于 lint 去重）。
+    参数: path=扫描目录(vault 相对, 默认 wiki); threshold=Jaccard 相似度阈值(默认0.7); limit=最多对数"""
     limit = max(1, min(limit, 200))
     threshold = max(0.0, min(threshold, 1.0))  # 钳制到 [0,1]
     # 安全校验：path 必须在 vault 内（防目录遍历逃逸）
@@ -1359,11 +1363,10 @@ def near_duplicates(path: str = "wiki", threshold: float = 0.7, limit: int = 50)
 @mcp.tool()
 def extract_document(path: str, max_chars: int = 20000, backend: str = "markitdown",
                      page_range: str = "") -> dict:
-    """本地文档/图片 → markdown/描述。返回 {"content": 文本} 或 {"error": 原因}。
-    backend: markitdown(本地离线,默认) / mineru(云端Agent版,免token,≤10MB/≤20页)
-             / mineru_pro(云端精准版,需 MINERU_API_KEY,≤200MB/≤200页,vlm模型)
-    page_range: 仅 mineru 后端有效，页码范围如 "1-20"（超 20 页的文档必须指定）。
-    参数: path=相对 vault 路径(必填); max_chars=返回最大字符数(默认20000)"""
+    """本地文档/图片转 markdown/描述。返回 {"content": 文本} 或 {"error": 原因}。
+    backend: markitdown(本地离线,默认) / mineru(云端免费,≤10MB/≤20页) / mineru_pro(精准版,需key,≤200MB)。
+    page_range: 仅 mineru 后端有效，如 "1-20"（超 20 页必须指定）。
+    参数: path=文件相对路径(必填); max_chars=返回最大字符数(默认20000)"""
     max_chars = max(1, max_chars)  # 参数校验
     f = safe_resolve(VAULT_ROOT, path)
     if not f or not f.is_file():
