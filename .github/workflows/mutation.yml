@@ -14,7 +14,7 @@ jobs:
           python-version: '3.12'
       - run: pip install mutmut pytest jieba fastmcp hypothesis httpx
       - name: 运行变异测试
-        run: mutmut run
+        run: mutmut run --runner "python -m pytest test_server.py test_fault.py test_hypothesis.py -q"
       - name: 显示结果
         run: mutmut results
 
@@ -29,6 +29,6 @@ jobs:
           python-version: '3.12'
       - run: pip install mutmut pytest jieba fastmcp hypothesis httpx
       - name: 运行变异测试
-        run: mutmut run
+        run: mutmut run --runner "python -m pytest test_server.py test_fault.py test_hypothesis.py -q"
       - name: 显示结果
         run: mutmut results

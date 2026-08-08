@@ -331,6 +331,9 @@ def rerank(query: str, documents: List[str]) -> Optional[List[int]]:
 def safe_resolve(root: Path, rel: str) -> Optional[Path]:
     try:
         target = (root / rel).resolve()
+        # 防超长路径：单段 >200 或总长 >2000 直接拒绝（is_file/stat 会抛 ENAMETOOLONG）
+        if len(str(target)) > 2000 or any(len(p) > 200 for p in target.parts):
+            return None
         target.relative_to(root.resolve())
         return target  # 返回 resolve 后的规范路径（安全且一致）
     except (ValueError, OSError):
