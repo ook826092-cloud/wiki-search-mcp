@@ -5,8 +5,24 @@ on:
 
 jobs:
   stress:
-    name: 压力测试
+    name: 极限测试（x86_64）
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pytest jieba fastmcp
+      - name: 极限测试（10万页/256线程/1万查询/50MB）
+        run: python -m pytest test_stress.py -v
+      - name: 回归极限测试（历史全部 bug 复现矩阵）
+        run: python -m pytest test_regression.py -v
+      - name: 敌意安全测试（SQL/命令注入/编码混淆/XSS/YAML炸弹/DoS/日志注入）
+        run: python -m pytest test_hostile.py -v
+
+  stress-arm:
+    name: 极限测试（ARM64 架构）
+    runs-on: ubuntu-24.04-arm
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
