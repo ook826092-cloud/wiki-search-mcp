@@ -46,8 +46,8 @@ def test_fts_injection_matrix():
 # ============ 3. LIKE 通配符转义 ============
 def test_like_wildcard_escape():
     """LIKE 通配符 % _ \\ 转义：不作为通配符误匹配"""
-    (TEST_ROOT / "w1.md").write_text("---\ntitle: 100%完成\n---\n进度", encoding="utf-8")
-    (TEST_ROOT / "w2.md").write_text("---\ntitle: 进度条\n---\n进度", encoding="utf-8")
+    (server.WIKI_ROOT / "w1.md").write_text("---\ntitle: 100%完成\n---\n进度", encoding="utf-8")
+    (server.WIKI_ROOT / "w2.md").write_text("---\ntitle: 进度条\n---\n进度", encoding="utf-8")
     server.reindex(full=True)
     db = server.get_db()
     rows = db.execute("SELECT path FROM page_meta WHERE title LIKE ? ESCAPE '\\'", ("%\\%%",)).fetchall()
@@ -95,7 +95,7 @@ def test_snippet_extreme():
     body = "⟪已有高亮⟫" + "普通内容" * 500 + "关键词位置" + "尾部内容" * 100
     sn = server.make_snippet(body, ["关键词"])
     assert isinstance(sn, str)
-    assert server.make_snippet("", []) == ""
+    assert server.make_snippet("", []) == "…"  # 空 body 返回省略号
     assert isinstance(server.make_snippet("x" * 10000, ["不存在的词"]), str)
 
 # ============ 7. 引用僵尸 + 附件逃逸 ============
@@ -139,7 +139,7 @@ def test_param_hell():
     assert "results" in server.search(query="x", limit=0)
     assert "results" in server.search(query="x", limit=10**9)
     assert "results" in server.search(query="x", mode="bad_mode")
-    assert "不存在" in server.get(path="无此文件.md", max_lines=10**6, from_line=10**6)
-    assert "不存在" in server.preview(path="无此文件.md", max_lines=10**6)
+    assert "INVALID" in server.get(path="无此文件.md", max_lines=10**6, from_line=10**6)
+    assert "INVALID" in server.preview(path="无此文件.md", max_lines=10**6)
     assert isinstance(server.related(path="无此文件.md", limit=5), list)
     assert isinstance(server.similar(path="无此文件.md", limit=5), list)

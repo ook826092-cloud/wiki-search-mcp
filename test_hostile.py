@@ -4,7 +4,7 @@ from pathlib import Path
 TEST_ROOT = Path(tempfile.mkdtemp())
 os.environ["WIKI_ROOT"] = str(TEST_ROOT)
 os.environ["VAULT_ROOT"] = str(TEST_ROOT)
-os.environ["WIKI_DB"] = str(TEST_ROOT / "test.db")
+os.environ["WIKI_DB"] = str(server.WIKI_ROOT / "test.db")
 os.environ["VEC0_PATH"] = ""
 os.environ["EMBED_BASE_URL"] = ""
 os.environ["RERANK_BASE_URL"] = ""
@@ -75,7 +75,7 @@ def test_xss_injection():
         r = server.search(query=q, limit=3)
         assert "results" in r, f"XSS 查询崩溃: {q!r}"
     # 页面内容含 XSS → snippet 不崩
-    (TEST_ROOT / "xss.md").write_text("<script>alert(1)</script>" + "正文", encoding="utf-8")
+    (server.WIKI_ROOT / "xss.md").write_text("<script>alert(1)</script>" + "正文", encoding="utf-8")
     server.reindex(full=True)
     r = server.search(query="alert", limit=3)
     assert "results" in r
@@ -126,7 +126,7 @@ def test_filename_hell():
     ]
     for n in names:
         try:
-            (TEST_ROOT / n).write_text(f"---\ntitle: {n}\n---\n内容", encoding="utf-8")
+            (server.WIKI_ROOT / n).write_text(f"---\ntitle: {n}\n---\n内容", encoding="utf-8")
         except OSError:
             continue  # 非法文件名系统拒绝，跳过（也是安全）
     server.reindex(full=True)
@@ -137,13 +137,13 @@ def test_filename_hell():
 # ============ 8. wikilink 复杂语法 ============
 def test_wikilink_complex_syntax():
     """wikilink：别名/锚点/管道/超长/嵌套 → lint 不崩"""
-    (TEST_ROOT / "wiki").mkdir(exist_ok=True)
+    (server.WIKI_ROOT / "wiki").mkdir(exist_ok=True)
     links = " ".join([
         "[[目标|显示名]]", "[[目标#锚点]]", "[[#纯锚点]]", "[[|空]]", "[[]]",
         "[[../../etc/passwd]]", "[[http://evil.com]]", "[[a" * 500 + "]]",
         "[[a]] [[b]] [[c]]" * 100, "![[图.png]]", "![[../../etc/shadow]]",
     ])
-    (TEST_ROOT / "wiki" / "w.md").write_text(links, encoding="utf-8")
+    (server.WIKI_ROOT / "wiki" / "w.md").write_text(links, encoding="utf-8")
     r = server.lint(path="wiki", limit=100)
     assert "broken" in r
 

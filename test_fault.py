@@ -4,7 +4,7 @@ from pathlib import Path
 TEST_ROOT = Path(tempfile.mkdtemp())
 os.environ["WIKI_ROOT"] = str(TEST_ROOT)
 os.environ["VAULT_ROOT"] = str(TEST_ROOT)
-os.environ["WIKI_DB"] = str(TEST_ROOT / "test.db")
+os.environ["WIKI_DB"] = str(server.WIKI_ROOT / "test.db")
 os.environ["VEC0_PATH"] = ""
 os.environ["EMBED_BASE_URL"] = ""   # 禁用嵌入（不耗额度）
 os.environ["RERANK_BASE_URL"] = ""
@@ -26,14 +26,14 @@ def test_super_long_query():
 
 def test_bad_frontmatter():
     """乱 frontmatter 不崩"""
-    (TEST_ROOT / "bad.md").write_text("---\nno closing\n正文", encoding="utf-8")
+    (server.WIKI_ROOT / "bad.md").write_text("---\nno closing\n正文", encoding="utf-8")
     server.reindex(full=True)
     db = server.get_db()
     assert db.execute("SELECT 1").fetchone()
 
 def test_embed_disabled_degrade():
     """嵌入禁用时 search 正常（关键词路径）"""
-    (TEST_ROOT / "ok.md").write_text("---\ntitle: 收藏夹\ntype: concept\n---\n收藏夹管理方法", encoding="utf-8")
+    (server.WIKI_ROOT / "ok.md").write_text("---\ntitle: 收藏夹\ntype: concept\n---\n收藏夹管理方法", encoding="utf-8")
     server.reindex(full=True)  # 先索引再搜（测试独立，不依赖前序副作用）
     r = server.search(query="收藏夹", mode="hybrid", limit=5)
     assert r["total"] >= 1
