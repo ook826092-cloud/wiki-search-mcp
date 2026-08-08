@@ -517,7 +517,8 @@ def _query_nature(query: str) -> str:
         return "desc"    # 描述句（怎么整理视频）→ 语义主导
     return "balanced"
 
-def _search_table(db, table: str, query: str, limit: int):
+def _search_table(db, table: str, query: str, limit: int, and_query: str = ""):
+    """and_query: 用于 AND 精确匹配的原始查询（不含同义词扩展——扩展词会把 AND 搞太严格导致无结果）"""
     if table not in ALLOWED_TABLES:
         raise ValueError(f"Invalid table: {table}")
     jtable = table + "_jieba"
@@ -532,17 +533,32 @@ def _search_table(db, table: str, query: str, limit: int):
         terms = [w for w in terms if w]
         if not terms:
             return results
-        for expr, weight, kind in ((" ".join('"%s"' % w for w in terms), 10.0, "jieba"),
-                                   (" OR ".join('"%s"' % w for w in terms), 5.0, "jieba_or")):
+        # 多词查询：精确 AND 优先（全部词都命中 = 最相关）；AND 无结果才 OR 兜底
+        and_words = [w for w in _jieba_cached(and_query or query) if len(w) >= 2 and w.strip() and w not in STOPWORDS]
+        and_words = [w.translate(str.maketrans("", "", "*()-+:^")) for w in and_words[:8]]
+        and_words = [w for w in and_words if w]
+        and_expr = " ".join('"%s"' % w for w in and_words) if and_words else " ".join('"%s"' % w for w in terms)
+        try:
+            and_rows = db.execute(
+                f"SELECT path, bm25({jtable}, {BM25_WEIGHTS[jtable]}) AS rank FROM {jtable} " # nosec B608
+                f"WHERE {jtable} MATCH ? ORDER BY rank LIMIT ?",
+                (and_expr, limit * FTS_LIMIT_MULT)).fetchall()
+        except sqlite3.Error:
+            and_rows = []
+        if and_rows:
+            for row in and_rows:
+                add(row["path"], -float(row["rank"]) + 10.0, "jieba")
+        else:
+            or_expr = " OR ".join('"%s"' % w for w in terms)
             try:
-                rows = db.execute(
+                or_rows = db.execute(
                     f"SELECT path, bm25({jtable}, {BM25_WEIGHTS[jtable]}) AS rank FROM {jtable} " # nosec B608
                     f"WHERE {jtable} MATCH ? ORDER BY rank LIMIT ?",
-                    (expr, limit * FTS_LIMIT_MULT))
-                for row in rows:
-                    add(row["path"], -float(row["rank"]) + weight, kind)
+                    (or_expr, limit * FTS_LIMIT_MULT))
+                for row in or_rows:
+                    add(row["path"], -float(row["rank"]) + 5.0, "jieba_or")
             except sqlite3.Error:
-                break
+                pass
     fts_terms, like_terms = tokenize_query(query)
     if ENABLE_TRIGRAM and fts_terms:
         expr = " OR ".join('"%s"' % t.replace('"', "") for t in fts_terms)  # 过滤引号防 FTS 语法错误
@@ -578,6 +594,10 @@ def _vector_search(db, query: str, limit: int) -> dict:
     if not EMBED_ENABLED:
         return {}
     try:
+        # 优化：向量表空时直接返回（不白调嵌入 API——之前每次查询都嵌入，查询慢 1s+）
+        has_vec = db.execute("SELECT 1 FROM pages_vec LIMIT 1").fetchone()
+        if not has_vec:
+            return {}
         vec = embed_texts([query])
         if not vec or vec[0] is None:
             return {}
@@ -923,7 +943,7 @@ def search(query: str, limit: int = 10, page_type: str = "", tags: str = "",
         kw_rank, sv_rank = {}, {}
         real_total = None  # 关键词路真实命中数（FTS count，不截断，用于 total 语义修正）
         if mode in ("hybrid", "keyword"):
-            kw = _search_table(db, "pages_fts", query_ext, eff_limit)
+            kw = _search_table(db, "pages_fts", query_ext, eff_limit, and_query=query)  # AND 用原始词（同义词不参与）
             kw_rank = {p: i + 1 for i, p in enumerate(sorted(kw.keys(), key=lambda p: -kw[p][0]))}
             try:
                 # total 用原始查询词（不含同义词扩展——扩展词会 OR 膨胀 total）
