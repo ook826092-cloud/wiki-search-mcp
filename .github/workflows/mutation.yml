@@ -17,3 +17,18 @@ jobs:
         run: mutmut run
       - name: 显示结果
         run: mutmut results
+
+  mutate-arm:
+    name: 变异测试（ARM64）
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install mutmut pytest jieba fastmcp hypothesis httpx
+      - name: 运行变异测试
+        run: mutmut run
+      - name: 显示结果
+        run: mutmut results
