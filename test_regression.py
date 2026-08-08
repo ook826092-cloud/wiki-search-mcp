@@ -140,6 +140,6 @@ def test_param_hell():
     assert "results" in server.search(query="x", limit=10**9)
     assert "results" in server.search(query="x", mode="bad_mode")
     assert "INVALID" in server.get(path="无此文件.md", max_lines=10**6, from_line=10**6)
-    assert "INVALID" in server.preview(path="无此文件.md", max_lines=10**6)
+    assert "INVALID" in server.preview(path="无此文件.md")  # preview 固定 50 行，无 max_lines 参数
     assert isinstance(server.related(path="无此文件.md", limit=5), list)
     assert isinstance(server.similar(path="无此文件.md", limit=5), list)
