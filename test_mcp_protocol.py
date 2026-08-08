@@ -23,16 +23,17 @@ def mcp_server():
         [sys.executable, "-m", "fastmcp", "run", "server.py",
          "--transport", "http", "--port", str(PORT)],
         env=env, cwd=SRV_DIR,
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for _ in range(60):
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    for _ in range(120):  # 最长 60s（jieba 首次加载 + fastmcp 启动可能慢）
         try:
             httpx.get(f"http://127.0.0.1:{PORT}/", timeout=1)
             break
         except Exception:
             time.sleep(0.5)
     else:
+        out, _ = p.communicate(timeout=5)
         p.terminate()
-        raise RuntimeError("MCP server 启动失败")
+        raise RuntimeError("MCP server 启动失败: " + out.decode(errors="ignore")[-2000:])
     yield
     p.terminate()
     p.wait(timeout=10)
