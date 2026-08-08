@@ -620,8 +620,7 @@ def _rerank_paths(query: str, paths: List[str]) -> List[str]:
 # ---------- 索引构建 ----------
 @mcp.tool()
 def reindex(full: bool = False) -> dict:
-    """重建索引。默认增量（只处理变化的文件）；full=True 全量重建（DROP 后重建全部表，含向量化）。""",
-    """嵌入模型按环境变量配置（EMBED_*），未配置时自动跳过向量化。"""
+    """重建索引。默认增量（只处理变化的文件）；full=True 全量重建（含向量化，嵌入由环境变量控制）。"""
     if not WIKI_ROOT.exists():  # 手动调用时目录缺失不崩溃
         return {"error": "WIKI_ROOT 不存在: " + str(WIKI_ROOT)}
     with closing(get_db()) as db:
@@ -880,11 +879,8 @@ def _resolve_attachment(db, page_file: Path, ref: str) -> Optional[str]:
 @mcp.tool()
 def search(query: str, limit: int = 10, page_type: str = "", tags: str = "",
            mode: str = "hybrid", since: str = "", group_by: str = "") -> dict:
-    """混合检索笔记（核心工具）。
-    mode: hybrid(默认, 关键词+向量语义RRF融合) / keyword(纯关键词) / semantic(纯语义)。
-    page_type: 类型过滤，多值逗号分隔（concept,entity）；tags: 标签过滤，多值 AND。
-    since: YYYY-MM-DD 只查该日期后更新；group_by="dir" 按顶层目录聚合。
-    返回 {results: [...], total: 总命中数}。"""
+    """混合检索笔记（核心工具）。mode: hybrid(默认, 关键词+语义融合) / keyword / semantic；
+    page_type/tags 多值过滤；since=YYYY-MM-DD 时间过滤；group_by="dir" 目录聚合。返回 {results, total}。"""
     if not query or not query.strip():  # 建议11: 空查询提前返回
         return {"results": [], "total": 0}
     fts_terms, like_terms = tokenize_query(query)
@@ -1150,8 +1146,7 @@ def list_pages(page_type: str = "", tags: str = "") -> list:
 
 @mcp.tool()
 def status() -> dict:
-    """索引健康状态与统计：页面/附件/引用数、类型分布、嵌入与重排模型、向量数、嵌入 tokens 用量、上次重建时间。""",
-    """监控嵌入额度前先看 embed_tokens_used。"""
+    """索引健康状态与统计：页面/附件/引用数、类型分布、嵌入与重排模型、向量数、嵌入 tokens 用量（监控额度先看它）、上次重建时间。"""
     with closing(get_db()) as db:
         total = db.execute("SELECT count(*) c FROM page_meta").fetchone()["c"]
         atts = db.execute("SELECT count(*) c FROM attachments").fetchone()["c"]
@@ -1255,12 +1250,8 @@ def related(path: str, limit: int = 5) -> list:
 
 @mcp.tool()
 def lint(path: str = "wiki", limit: int = 100) -> dict:
-    """知识库体检：扫描 wikilink 断链（指向不存在的页面/附件）。
-    智能判定：
-    - 精确匹配：vault 相对路径存在
-    - 模糊匹配：目标文件名在 vault 任意位置存在（如 [[sources/x]] 实际在 wiki/sources/）
-    - 模板豁免：wiki/Welcome*/欢迎*/schema/ 占位链接不判链
-    参数: path=扫描目录(vault 相对, 默认 wiki); limit=最多返回断链数"""
+    """断链检测：扫描 wikilink 指向不存在的页面/附件。精确匹配 + 文件名模糊匹配 + 模板页(Welcom/schema)豁免。
+    参数: path=扫描目录(默认 wiki); limit=最多返回断链数"""
     limit = max(1, min(limit, 500))
     # 安全校验：path 必须在 vault 内（防 ../../etc 目录遍历逃逸）
     if not safe_resolve(WIKI_ROOT, path):
@@ -1363,10 +1354,8 @@ def near_duplicates(path: str = "wiki", threshold: float = 0.7, limit: int = 50)
 @mcp.tool()
 def extract_document(path: str, max_chars: int = 20000, backend: str = "markitdown",
                      page_range: str = "") -> dict:
-    """本地文档/图片转 markdown/描述。返回 {"content": 文本} 或 {"error": 原因}。
-    backend: markitdown(本地离线,默认) / mineru(云端免费,≤10MB/≤20页) / mineru_pro(精准版,需key,≤200MB)。
-    page_range: 仅 mineru 后端有效，如 "1-20"（超 20 页必须指定）。
-    参数: path=文件相对路径(必填); max_chars=返回最大字符数(默认20000)"""
+    """本地文档/图片转 markdown。backend: markitdown(本地默认) / mineru(云端免费≤10MB) / mineru_pro(需key≤200MB)。
+    参数: path(必填); max_chars(默认20000); page_range(仅mineru, 超20页必填)"""
     max_chars = max(1, max_chars)  # 参数校验
     f = safe_resolve(VAULT_ROOT, path)
     if not f or not f.is_file():
