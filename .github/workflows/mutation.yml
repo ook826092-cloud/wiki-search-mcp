@@ -3,7 +3,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  变异执行:
+  mutate:
+    name: 变异测试
     runs-on: ubuntu-latest
     timeout-minutes: 300
     steps:
