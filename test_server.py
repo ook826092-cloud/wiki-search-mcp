@@ -62,10 +62,11 @@ def test_integration_search():
     db.close()
 
 def test_integration_lint():
-    """集成：断链检测（模板豁免 + 模糊匹配）"""
+    """集成：断链检测（模板豁免 + 模糊匹配）——测试独立，先 reindex 再 lint"""
     (TEST_ROOT / "wiki").mkdir(exist_ok=True)
     (TEST_ROOT / "wiki" / "a.md").write_text("[[存在的页面]] [[不存在的]]", encoding="utf-8")
     (TEST_ROOT / "存在的页面.md").write_text("x", encoding="utf-8")
+    server.reindex(full=True)  # 新文件进 DB，lint 模糊匹配才有依据
     r = server.lint(path="wiki", limit=10)
     links = {b["link"] for b in r["broken"]}
     assert "存在的页面" not in links  # 模糊匹配：文件存在不算断链
