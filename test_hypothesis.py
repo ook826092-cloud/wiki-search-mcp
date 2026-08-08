@@ -47,10 +47,11 @@ def test_make_snippet_no_crash(body, terms):
 
 @given(st.text(max_size=50), st.text(max_size=100))
 def test_safe_resolve_never_escapes(root, rel):
-    p = server.safe_resolve(Path(tempfile.mkdtemp()), rel)
-    # 结果要么 None，要么在 root 内
+    base = Path(tempfile.mkdtemp()).resolve()
+    p = server.safe_resolve(base, rel)
+    # 结果要么 None，要么在传入的 root 内
     if p is not None:
-        assert str(p).startswith(str(server.WIKI_ROOT))
+        assert str(p).startswith(str(base)), f"逃逸: {rel!r} -> {p}"
 
 @given(st.text(max_size=200))
 def test_jieba_seg_never_crashes(s):
