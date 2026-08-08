@@ -1062,14 +1062,13 @@ def get(path: str, max_lines: int = 500, from_line: int = 0) -> str:  # 默认 5
     return "\n".join(lines[from_line:from_line + max_lines])
 
 @mcp.tool()
-def preview(path: str, max_lines: int = 30) -> str:
-    """快速预览笔记开头（frontmatter + 前几行），用于快速判断相关性，省 token。
-    参数: path=笔记相对路径(必填); max_lines=行数(默认30)"""
+def preview(path: str) -> str:
+    """快速预览笔记开头（固定 50 行，轻量判断相关性，省 token）。
+    参数: path=笔记相对路径(必填)"""
     f = safe_resolve(WIKI_ROOT, path)
     if not f or not f.is_file(): return "INVALID PATH: " + path
-    max_lines = max(1, min(max_lines, MAX_LINES_HARD))
     lines = f.read_text(encoding="utf-8", errors="ignore").splitlines()
-    return "\n".join(lines[:max_lines])
+    return "\n".join(lines[:50])  # 固定 50 行（不可配置，与 get 区分）
 
 @mcp.tool()
 def search_attachment(query: str, ext: str = "", limit: int = 10) -> list:
