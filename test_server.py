@@ -56,8 +56,8 @@ def test_integration_search():
     db = server.get_db()
     n = db.execute("SELECT count(*) c FROM page_meta").fetchone()["c"]
     assert n >= 1
-    # FTS 检索
-    rows = db.execute("SELECT path FROM pages_fts_jieba WHERE pages_fts_jieba MATCH ?", ('"收藏夹"',)).fetchall()
+    # FTS 检索（用 jieba 保证的单词，短语 "收藏夹" 可能被切词不匹配）
+    rows = db.execute("SELECT path FROM pages_fts_jieba WHERE pages_fts_jieba MATCH ?", ('"管理"',)).fetchall()
     assert any("p1.md" in r["path"] for r in rows)
     db.close()
 
