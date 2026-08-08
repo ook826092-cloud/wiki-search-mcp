@@ -7,6 +7,7 @@ jobs:
   stress:
     name: 极限测试（x86_64）
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -23,6 +24,7 @@ jobs:
   stress-arm:
     name: 极限测试（ARM64 架构）
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
