@@ -13,20 +13,26 @@ jobs:
           docker run --rm -d --name termux-test termux/termux-docker:latest sleep 300
       - name: 安装依赖（termux pkg）
         run: |
-          docker exec -u termux termux-test sh -c "pkg update -y && pkg install -y python && pip install pytest jieba fastmcp"
+          docker exec termux-test sh -c "id termux 2>/dev/null || useradd -m termux"
+          docker exec termux-test sh -c "chown -R termux:termux /data/data/com.termux 2>/dev/null || true"
+          docker exec termux-test sh -c "su termux -c 'pkg update -y && pkg install -y python && pip install pytest jieba fastmcp'"
       - name: 复制代码与测试
         run: |
           docker cp server.py termux-test:/data/data/com.termux/files/home/
           docker cp test_server.py test_fault.py test_regression.py test_hostile.py termux-test:/data/data/com.termux/files/home/
       - name: 回归+敌意极限测试（Termux bionic 环境）
         run: |
-          docker exec -u termux termux-test sh -c "cd ~ && python -m pytest test_regression.py test_hostile.py -v"
+          docker exec termux-test sh -c "su termux -c 'cd ~ && python -m pytest test_regression.py test_hostile.py -v'"
 
   android-emulator:
     name: Android 模拟器（真机 Termux，x86_64 快）
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: 启用 KVM 权限
+        run: |
+          sudo usermod -aG kvm $USER
+          sudo chmod 666 /dev/kvm || true
       - uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
@@ -57,6 +63,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: 启用 KVM 权限
+        run: |
+          sudo usermod -aG kvm $USER
+          sudo chmod 666 /dev/kvm || true
       - uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
