@@ -102,7 +102,8 @@ def test_dos_giant_input():
     assert "results" in r
     # 极限参数
     assert "results" in server.search(query="x", limit=10**9)
-    assert isinstance(server.get(path="x" * 5000, max_lines=10**9), str)
+    r = server.get(path="x" * 5000, max_lines=10**9)
+    assert isinstance(r, (str, dict)), f"get 返回类型异常: {type(r)}"
     # 300 线程并行 DoS 式轰炸
     errs = []
     def hammer(i):

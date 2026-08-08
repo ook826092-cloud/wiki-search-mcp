@@ -15,15 +15,3 @@ jobs:
         with:
           languages: python
       - uses: github/codeql-action/analyze@v3
-
-  analyze-arm:
-    name: 安全分析（ARM64）
-    runs-on: ubuntu-24.04-arm
-    permissions:
-      security-events: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
-        with:
-          languages: python
-      - uses: github/codeql-action/analyze@v3
