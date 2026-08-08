@@ -1,6 +1,5 @@
 name: 极限测试
 on:
-  push:
   workflow_dispatch:
 
 jobs:

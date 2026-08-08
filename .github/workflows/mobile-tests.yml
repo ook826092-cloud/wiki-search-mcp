@@ -1,7 +1,6 @@
 name: 移动端极限测试
 on:
   workflow_dispatch:
-  push:
 
 jobs:
   termux-env:
