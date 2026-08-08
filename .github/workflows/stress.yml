@@ -13,5 +13,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install pytest jieba fastmcp
-      - name: 极限测试（并发/海量/路径攻击/模糊查询）
+      - name: 极限测试（10万页/256线程/1万查询/50MB）
         run: python -m pytest test_stress.py -v
+      - name: 回归极限测试（历史全部 bug 复现矩阵）
+        run: python -m pytest test_regression.py -v
