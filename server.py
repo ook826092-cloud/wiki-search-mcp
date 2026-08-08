@@ -913,9 +913,16 @@ def search(query: str, limit: int = 10, page_type: str = "", tags: str = "",
                 query_ext += " " + t
         # RRF 融合（关键词 + 语义 rank 融合，量纲一致，语义真正参与排序）
         kw_rank, sv_rank = {}, {}
+        real_total = None  # 关键词路真实命中数（FTS count，不截断，用于 total 语义修正）
         if mode in ("hybrid", "keyword"):
             kw = _search_table(db, "pages_fts", query_ext, eff_limit)
             kw_rank = {p: i + 1 for i, p in enumerate(sorted(kw.keys(), key=lambda p: -kw[p][0]))}
+            try:
+                real_total = db.execute(
+                    "SELECT count(*) c FROM pages_fts_jieba WHERE pages_fts_jieba MATCH ?",
+                    (query_ext,)).fetchone()["c"]
+            except Exception:
+                real_total = None
         if mode in ("hybrid", "semantic"):
             sv = _vector_search(db, query, VEC_TOP_K)
             sv_rank = {p: i + 1 for i, p in enumerate(sorted(sv.keys(), key=lambda p: -sv[p]))}
@@ -950,6 +957,8 @@ def search(query: str, limit: int = 10, page_type: str = "", tags: str = "",
             if since_ts is not None and (meta["updated"] or 0) < since_ts: continue
             filtered.append((path, meta))
         total = len(filtered)
+        if real_total is not None and not (pt_list or tag_list or since):
+            total = real_total  # 无过滤时 total = 真实命中数（不被 limit 截断）
         out = []
         for path, meta in filtered[:limit]:
             snippet = ""

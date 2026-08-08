@@ -10,10 +10,10 @@ os.environ["EMBED_BASE_URL"] = ""   # 强制禁用嵌入（零额度消耗）
 os.environ["RERANK_BASE_URL"] = ""
 import server  # noqa: E402
 
-def test_bulk_reindex_50000_pages():
+def test_bulk_reindex_100000_pages():
     """🏆 5 万页全量索引（10 万页在 runner 32 分钟跑不完被取消，5 万页是极限且能完成）：正确性 + 性能报告"""
     t0 = time.time()
-    for i in range(50000):
+    for i in range(100000):
         (TEST_ROOT / f"p{i:05}.md").write_text(
             f"---\ntitle: 页面{i}\ntype: concept\ntags: [压力]\n---\n压力测试内容 {i} 号收藏夹管理方法",
             encoding="utf-8")
@@ -25,10 +25,10 @@ def test_bulk_reindex_50000_pages():
     n = db.execute("SELECT count(*) c FROM page_meta").fetchone()["c"]
     size = os.path.getsize(os.environ["WIKI_DB"]) / 1e6
     db.close()
-    print(f"\n🏆 索引 50000 页: 写入 {tw:.0f}s + 索引 {dt:.0f}s（{50000/dt:.0f} 页/s），DB {size:.1f}MB")
-    assert n >= 50000, f"只索引到 {n} 页"
+    print(f"\n🏆 索引 100000 页: 写入 {tw:.0f}s + 索引 {dt:.0f}s（{100000/dt:.0f} 页/s），DB {size:.1f}MB")
+    assert n >= 100000, f"只索引到 {n} 页"
     r = server.search(query="收藏夹", limit=50)
-    assert r["total"] >= 50000, f"只搜到 {r['total']}"
+    assert r["total"] >= 100000, f"只搜到 {r['total']}"
 
 def test_benchmark_query_10000():
     """🏆 1 万次查询压测：p50/p95/p99 + 最大 QPS"""
@@ -49,7 +49,7 @@ def test_concurrency_256():
     def worker(i):
         try:
             for _ in range(5):
-                r = server.search(query=f"页面{i % 50000}", limit=5)
+                r = server.search(query=f"页面{i % 100000}", limit=5)
                 assert "results" in r
         except Exception as e:
             errs.append(e)
@@ -60,7 +60,7 @@ def test_concurrency_256():
 
 def test_huge_page_50mb():
     """🏆 50MB 巨页：reindex 不崩"""
-    (TEST_ROOT / "huge.md").write_text("---\ntitle: 巨页\n---\n" + "内容" * 17500000, encoding="utf-8")
+    (TEST_ROOT / "huge.md").write_text("---\ntitle: 巨页\n---\n" + "内容" * 171000000, encoding="utf-8")
     server.reindex(full=True)
     r = server.search(query="巨页", limit=3)
     assert r["total"] >= 1
