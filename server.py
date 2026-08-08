@@ -927,9 +927,15 @@ def search(query: str, limit: int = 10, page_type: str = "", tags: str = "",
             kw = _search_table(db, "pages_fts", query_ext, eff_limit)
             kw_rank = {p: i + 1 for i, p in enumerate(sorted(kw.keys(), key=lambda p: -kw[p][0]))}
             try:
-                real_total = db.execute(
-                    "SELECT count(*) c FROM pages_fts_jieba WHERE pages_fts_jieba MATCH ?",
-                    (query_ext,)).fetchone()["c"]
+                # total 用原始查询词（不含同义词扩展——扩展词会 OR 膨胀 total）
+                _qw2 = [w for w in _jieba_cached(query) if len(w) >= 2]
+                if _qw2:
+                    _expr = " OR ".join('"%s"' % w.replace('"', "") for w in _qw2)
+                    real_total = db.execute(
+                        "SELECT count(*) c FROM pages_fts_jieba WHERE pages_fts_jieba MATCH ?",
+                        (_expr,)).fetchone()["c"]
+                else:
+                    real_total = None
             except Exception:
                 real_total = None
         if mode in ("hybrid", "semantic"):
