@@ -95,28 +95,6 @@ nohup fastmcp run server.py --transport http --port 8181 &
 - symlink 逃逸防御
 - 参数边界校验
 
-## 🧪 测试体系（进行中）
-
-本项目配置了完整的企业级 CI/CD 测试体系（GitHub Actions），当前以下测试**正在进行中**，全部通过后将标注「企业级标准测试通过」。
-
-| Workflow | 测什么 | 架构 | 触发 | 状态 |
-|---|---|---|---|---|
-| **静态+动态测试** | 语法/Ruff 静态错误/Bandit 安全/Semgrep OWASP 扫描/MyPy 类型 + 单元/故障注入/属性测试（hypothesis）/MCP 协议级/覆盖率 | x86_64 + ARM64 | push 自动 | 🔄 进行中（Semgrep 新增验证） |
-| **安全分析（CodeQL）** | GitHub 官方语义安全分析（SQL 注入/XSS/路径遍历/敏感信息） | x86_64 | push 自动 | 🔄 x86 已通过；ARM64 官方不支持，由 Semgrep 覆盖 |
-| **极限测试** | 企业级百万页全量索引（reindex 分批 flush）、1 万次查询压测（p50/p95/p99/QPS）、256 线程并发、50MB 巨页、5000 模糊查询、路径攻击、wikilink 注入 | x86_64 + ARM64 | 手动触发 | 🔄 进行中 |
-| **移动端极限测试** | Termux（bionic）容器环境 + Android 模拟器（x86_64 / arm64-v8a 真机架构）真装 Termux APK 跑回归/敌意测试 | x86_64 + ARM64 模拟器 | 手动触发 | 🔄 进行中 |
-| **变异测试** | mutmut 自动篡改 server.py 全部逻辑点，衡量测试套件杀伤力（杀死率 = 测试质量） | x86_64 + ARM64 | 手动触发 | 🔄 进行中 |
-
-### 测试覆盖范围
-
-- **静态**：语法编译、ruff 未定义/逻辑错误、bandit 安全模式、Semgrep OWASP 语义规则、mypy 类型检查
-- **动态**：单元测试、故障注入（空查询/超长输入/FTS 特殊字符/嵌入禁用降级）、hypothesis 属性测试（随机边界轰炸）、MCP 协议级（真起 server + StreamableHttp 调 15 工具）
-- **极限**：百万页索引、查询延迟基准、并发轰炸、路径攻击矩阵、编码混淆、SQL/命令注入、XSS、YAML 炸弹、DoS
-- **安全**：CodeQL（x86）+ Semgrep（ARM64）+ bandit 三路安全扫描
-- **移动端**：Termux bionic 真实环境 + Android 模拟器真机 Termux
-
-> 📌 测试状态说明：进行中测试的最终结果将在通过后更新于此章节。
-
 ## 📄 License
 
 MIT
