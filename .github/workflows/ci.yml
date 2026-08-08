@@ -37,7 +37,7 @@ jobs:
           python-version: '3.12'
       - run: pip install pytest jieba fastmcp pytest-cov hypothesis httpx
       - name: 单元+故障+属性测试（含覆盖率）
-        run: python -m pytest test_server.py test_fault.py test_hypothesis.py -v --cov=server --cov-report=term-missing --cov-fail-under=40
+        run: python -m pytest test_server.py test_fault.py test_hypothesis.py test_regression.py test_hostile.py -v --cov=server --cov-report=term-missing --cov-fail-under=40
       - name: MCP 协议级测试（真实 HTTP）
         run: python -m pytest test_mcp_protocol.py -v
 
@@ -71,6 +71,6 @@ jobs:
           python-version: '3.12'
       - run: pip install pytest jieba fastmcp pytest-cov hypothesis httpx
       - name: 单元+故障+属性测试（含覆盖率）
-        run: python -m pytest test_server.py test_fault.py test_hypothesis.py -v --cov=server --cov-report=term-missing --cov-fail-under=40
+        run: python -m pytest test_server.py test_fault.py test_hypothesis.py test_regression.py test_hostile.py -v --cov=server --cov-report=term-missing --cov-fail-under=40
       - name: MCP 协议级测试（真实 HTTP）
         run: python -m pytest test_mcp_protocol.py -v

@@ -15,8 +15,11 @@ jobs:
       - run: pip install mutmut pytest jieba fastmcp hypothesis httpx
       - name: 运行变异测试
         run: |
-          mv test_stress.py _stress_million.py       # 百万页太重，移出变异范围
-          mv test_mcp_protocol.py _protocol_excluded.py  # 起 server 不适合变异（变异后 server 起不来）
+          # 只保留基线已验证的轻测试（其余排除：百万页太重/起server/基线未验证）
+          mv test_stress.py _stress_million.py
+          mv test_mcp_protocol.py _protocol_excluded.py
+          mv test_regression.py _regression_excluded.py
+          mv test_hostile.py _hostile_excluded.py
           mutmut run
       - name: 显示结果
         run: mutmut results
@@ -33,8 +36,11 @@ jobs:
       - run: pip install mutmut pytest jieba fastmcp hypothesis httpx
       - name: 运行变异测试
         run: |
-          mv test_stress.py _stress_million.py       # 百万页太重，移出变异范围
-          mv test_mcp_protocol.py _protocol_excluded.py  # 起 server 不适合变异（变异后 server 起不来）
+          # 只保留基线已验证的轻测试（其余排除：百万页太重/起server/基线未验证）
+          mv test_stress.py _stress_million.py
+          mv test_mcp_protocol.py _protocol_excluded.py
+          mv test_regression.py _regression_excluded.py
+          mv test_hostile.py _hostile_excluded.py
           mutmut run
       - name: 显示结果
         run: mutmut results
