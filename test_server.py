@@ -64,13 +64,13 @@ def test_integration_search():
 def test_integration_lint():
     """集成：断链检测（模板豁免 + 模糊匹配）——测试独立，先 reindex 再 lint"""
     (TEST_ROOT / "wiki").mkdir(exist_ok=True)
-    (TEST_ROOT / "wiki" / "a.md").write_text("[[存在的页面]] [[不存在的]]", encoding="utf-8")
-    (TEST_ROOT / "存在的页面.md").write_text("x", encoding="utf-8")
+    (TEST_ROOT / "wiki" / "a.md").write_text("[[存在页面abc123]] [[不存在页面xyz789]]", encoding="utf-8")
+    (TEST_ROOT / "存在页面abc123.md").write_text("x", encoding="utf-8")
     server.reindex(full=True)  # 新文件进 DB，lint 模糊匹配才有依据
     r = server.lint(path="wiki", limit=10)
     links = {b["link"] for b in r["broken"]}
-    assert "存在的页面" not in links  # 模糊匹配：文件存在不算断链
-    assert "不存在的" in links
+    assert "存在页面abc123" not in links  # 模糊匹配：文件存在不算断链（独特名防误判）
+    assert "不存在页面xyz789" in links
 
 if __name__ == "__main__":
     import pytest, sys
