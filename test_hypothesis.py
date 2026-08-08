@@ -6,6 +6,8 @@ os.environ["WIKI_ROOT"] = str(TEST_ROOT)
 os.environ["VAULT_ROOT"] = str(TEST_ROOT)
 os.environ["WIKI_DB"] = str(TEST_ROOT / "test.db")
 os.environ["VEC0_PATH"] = ""
+os.environ["EMBED_BASE_URL"] = ""  # 强制禁用嵌入（零额度消耗）
+os.environ["RERANK_BASE_URL"] = ""
 import server  # noqa: E402
 from hypothesis import given, strategies as st, settings
 settings.register_profile("ci", max_examples=30, deadline=2000)

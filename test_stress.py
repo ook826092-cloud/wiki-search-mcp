@@ -10,19 +10,38 @@ os.environ["EMBED_BASE_URL"] = ""
 os.environ["RERANK_BASE_URL"] = ""
 import server  # noqa: E402
 
-def test_bulk_reindex_5000_pages():
-    """海量：5000 页全量索引 → 全部可检索（真极限）"""
-    for i in range(5000):
-        (TEST_ROOT / f"p{i:04}.md").write_text(
+import time, statistics
+
+def test_bulk_reindex_10000_pages():
+    """海量+基准：10000 页全量索引 → 正确性 + 耗时报告"""
+    for i in range(10000):
+        (TEST_ROOT / f"p{i:05}.md").write_text(
             f"---\ntitle: 页面{i}\ntype: concept\ntags: [压力]\n---\n压力测试内容 {i} 号收藏夹管理方法",
             encoding="utf-8")
+    t0 = time.time()
     server.reindex(full=True)
+    dt = time.time() - t0
+    print(f"\n📊 索引 10000 页: {dt:.1f}s（{10000/dt:.0f} 页/s）")
     db = server.get_db()
     n = db.execute("SELECT count(*) c FROM page_meta").fetchone()["c"]
-    assert n >= 5000, f"只索引到 {n} 页"
+    assert n >= 10000, f"只索引到 {n} 页"
     r = server.search(query="收藏夹", limit=50)
-    assert r["total"] >= 5000, f"只搜到 {r['total']}"
+    assert r["total"] >= 10000, f"只搜到 {r['total']}"
     db.close()
+    assert dt < 300, f"索引太慢: {dt:.1f}s"
+
+def test_benchmark_query_latency():
+    """基准：查询延迟 p50/p95 + QPS"""
+    lat = []
+    for _ in range(500):
+        t0 = time.time()
+        server.search(query="压力测试", limit=10)
+        lat.append((time.time() - t0) * 1000)
+    lat.sort()
+    p50, p95 = lat[len(lat)//2], lat[int(len(lat)*0.95)]
+    qps = 1000 / (sum(lat) / len(lat))
+    print(f"\n📊 查询延迟: p50={p50:.1f}ms p95={p95:.1f}ms 吞吐={qps:.0f} QPS")
+    assert p95 < 2000, f"p95 太慢: {p95:.0f}ms"
 
 def test_reindex_idempotent():
     """幂等：reindex 两次无重复"""
@@ -39,7 +58,7 @@ def test_concurrent_search():
     def worker(i):
         try:
             for _ in range(10):
-                r = server.search(query=f"页面{i % 5000}", limit=5)
+                r = server.search(query=f"页面{i % 10000}", limit=5)
                 assert "results" in r
         except Exception as e:
             errs.append(e)
