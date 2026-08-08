@@ -1051,9 +1051,9 @@ def similar(path: str, limit: int = 5) -> list:
     return out
 
 @mcp.tool()
-def get(path: str, max_lines: int = 200, from_line: int = 0) -> str:
+def get(path: str, max_lines: int = 500, from_line: int = 0) -> str:  # 默认 500 行（一次读全，避免多次调用）
     """读取笔记全文（markdown），用于精读检索命中的笔记。
-    参数: path=笔记相对路径(必填); max_lines=最多行数(默认200); from_line=起始行(默认0)"""
+    参数: path=笔记相对路径(必填); max_lines=最多行数(默认500); from_line=起始行(默认0)"""
     f = safe_resolve(WIKI_ROOT, path)
     if not f or not f.is_file(): return "INVALID PATH: " + path
     from_line = max(0, from_line)
