@@ -17,3 +17,5 @@ jobs:
         run: python -m pytest test_stress.py -v
       - name: 回归极限测试（历史全部 bug 复现矩阵）
         run: python -m pytest test_regression.py -v
+      - name: 敌意安全测试（SQL/命令注入/编码混淆/XSS/YAML炸弹/DoS/日志注入）
+        run: python -m pytest test_hostile.py -v
