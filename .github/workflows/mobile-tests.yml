@@ -1,0 +1,52 @@
+name: 移动端极限测试
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  termux-env:
+    name: Termux 环境（bionic 容器）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 启动 Termux 容器
+        run: |
+          docker run --rm -d --name termux-test termux/termux-docker:latest sleep 300
+      - name: 安装依赖（termux pkg）
+        run: |
+          docker exec termux-test bash -c "pkg update -y && pkg install -y python python-pip && pip install pytest jieba fastmcp"
+      - name: 复制代码与测试
+        run: |
+          docker cp server.py termux-test:/data/data/com.termux/files/home/
+          docker cp test_server.py test_fault.py test_regression.py test_hostile.py termux-test:/data/data/com.termux/files/home/
+      - name: 回归+敌意极限测试（Termux bionic 环境）
+        run: |
+          docker exec termux-test bash -c "cd ~ && python -m pytest test_regression.py test_hostile.py -v"
+
+  android-emulator:
+    name: Android 模拟器（真机 Termux）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            # 下载并安装 Termux（x86_64）
+            curl -sL -o /tmp/termux.apk "https://github.com/termux/termux-app/releases/latest/download/termux-app_v0.118.0%2Bgithub-debug_x86_64.apk"
+            adb install /tmp/termux.apk
+            # 启动 Termux 初始化
+            adb shell am start -n com.termux/.app.TermuxActivity
+            sleep 10
+            export TUX="PATH=/data/data/com.termux/files/usr/bin:$PATH HOME=/data/data/com.termux/files/home"
+            # 装 python + 依赖
+            adb shell "$TUX pkg update -y"
+            adb shell "$TUX pkg install -y python python-pip"
+            adb shell "$TUX pip install pytest jieba fastmcp"
+            # 推代码
+            adb push server.py test_server.py test_fault.py test_regression.py test_hostile.py /data/local/tmp/
+            # 极限测试（真机 Termux bionic）
+            adb shell "cd /data/local/tmp && $TUX python -m pytest test_regression.py test_hostile.py -v"
