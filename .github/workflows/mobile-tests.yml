@@ -24,7 +24,7 @@ jobs:
           docker exec termux-test bash -c "cd ~ && python -m pytest test_regression.py test_hostile.py -v"
 
   android-emulator:
-    name: Android 模拟器（真机 Termux）
+    name: Android 模拟器（真机 Termux，x86_64 快）
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -49,4 +49,28 @@ jobs:
             # 推代码
             adb push server.py test_server.py test_fault.py test_regression.py test_hostile.py /data/local/tmp/
             # 极限测试（真机 Termux bionic）
+            adb shell "cd /data/local/tmp && $TUX python -m pytest test_regression.py test_hostile.py -v"
+
+  android-emulator-arm:
+    name: Android 模拟器（真机 Termux，ARM64 慢但真）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: arm64-v8a
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            # 下载并安装 Termux（arm64-v8a）
+            curl -sL -o /tmp/termux.apk "https://github.com/termux/termux-app/releases/latest/download/termux-app_v0.118.0%2Bgithub-debug_arm64-v8a.apk"
+            adb install /tmp/termux.apk
+            adb shell am start -n com.termux/.app.TermuxActivity
+            sleep 10
+            export TUX="PATH=/data/data/com.termux/files/usr/bin:$PATH HOME=/data/data/com.termux/files/home"
+            adb shell "$TUX pkg update -y"
+            adb shell "$TUX pkg install -y python"
+            adb shell "$TUX pip install pytest jieba fastmcp"
+            adb push server.py test_server.py test_fault.py test_regression.py test_hostile.py /data/local/tmp/
             adb shell "cd /data/local/tmp && $TUX python -m pytest test_regression.py test_hostile.py -v"
