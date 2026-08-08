@@ -14,7 +14,7 @@ jobs:
           docker run --rm -d --name termux-test termux/termux-docker:latest sleep 300
       - name: 安装依赖（termux pkg）
         run: |
-          docker exec termux-test bash -c "pkg update -y && pkg install -y python python-pip && pip install pytest jieba fastmcp"
+          docker exec termux-test sh -c "pkg update -y && pkg install -y python && pip install pytest jieba fastmcp"
       - name: 复制代码与测试
         run: |
           docker cp server.py termux-test:/data/data/com.termux/files/home/
@@ -44,7 +44,7 @@ jobs:
             export TUX="PATH=/data/data/com.termux/files/usr/bin:$PATH HOME=/data/data/com.termux/files/home"
             # 装 python + 依赖
             adb shell "$TUX pkg update -y"
-            adb shell "$TUX pkg install -y python python-pip"
+            adb shell "$TUX pkg install -y python"
             adb shell "$TUX pip install pytest jieba fastmcp"
             # 推代码
             adb push server.py test_server.py test_fault.py test_regression.py test_hostile.py /data/local/tmp/
