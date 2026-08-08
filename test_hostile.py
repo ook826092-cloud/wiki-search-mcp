@@ -55,7 +55,7 @@ def test_encoding_confusion():
         "..%5c..%5cetc",        # 反斜杠编码
         "..\t/..\t/etc",        # 制表符
         "\x1b[31mRED\x1b[0m.md",  # ANSI 转义
-        "\\?\C:\Windows",       # NT 设备路径
+        "\\\\?\\C:\\Windows",       # NT 设备路径
         "file:../../etc",       # URI scheme
     ]
     for p in evil:
