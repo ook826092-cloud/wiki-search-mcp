@@ -4,7 +4,7 @@ from pathlib import Path
 TEST_ROOT = Path(tempfile.mkdtemp())
 os.environ["WIKI_ROOT"] = str(TEST_ROOT)
 os.environ["VAULT_ROOT"] = str(TEST_ROOT)
-os.environ["WIKI_DB"] = str(server.WIKI_ROOT / "test.db")
+os.environ["WIKI_DB"] = str(TEST_ROOT / "test.db")
 os.environ["VEC0_PATH"] = ""
 os.environ["EMBED_BASE_URL"] = ""
 os.environ["RERANK_BASE_URL"] = ""
