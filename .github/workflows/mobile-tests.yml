@@ -35,7 +35,7 @@ jobs:
           disable-animations: true
           script: |
             # 下载并安装 Termux（x86_64，动态解析 latest asset 不写死版本）
-            URL=$(curl -s https://api.github.com/repos/termux/termux-app/releases/latest | grep -oE '"browser_download_url": *"[^"]*x86_64\.apk"' | head -1 | sed 's/.*"browser_download_url": *"//; s/"$//')
+            URL=$(curl -s https://api.github.com/repos/termux/termux-app/releases/latest | jq -r '.assets[] | select(.name|endswith("x86_64.apk")) | .browser_download_url' | head -1)
             echo "APK: $URL"
             curl -sL -o /tmp/termux.apk "$URL"
             adb install /tmp/termux.apk
@@ -65,7 +65,7 @@ jobs:
           disable-animations: true
           script: |
             # 下载并安装 Termux（arm64-v8a，动态解析 latest asset）
-            URL=$(curl -s https://api.github.com/repos/termux/termux-app/releases/latest | grep -oE '"browser_download_url": *"[^"]*arm64-v8a\.apk"' | head -1 | sed 's/.*"browser_download_url": *"//; s/"$//')
+            URL=$(curl -s https://api.github.com/repos/termux/termux-app/releases/latest | jq -r '.assets[] | select(.name|endswith("arm64-v8a.apk")) | .browser_download_url' | head -1)
             echo "APK: $URL"
             curl -sL -o /tmp/termux.apk "$URL"
             adb install /tmp/termux.apk

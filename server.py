@@ -624,7 +624,7 @@ def reindex(full: bool = False) -> dict:
         att_mtimes = get_meta(db, "att_mtimes", {})
         updated_pages = set()
         all_pages = []
-        embedded = set()   # 向量化成功集合（提前初始化，防止 pages_data 空时 NameError）
+        embedded: set = set()   # 向量化成功集合（提前初始化，防止 pages_data 空时 NameError）
         now_str = time.strftime("%Y-%m-%d %H:%M:%S")
         _reindex_t0 = time.time()
         db.execute("BEGIN")
@@ -644,26 +644,26 @@ def reindex(full: bool = False) -> dict:
             pages_data, meta_data = [], []
             REINDEX_FLUSH = 5000
 
-            def _flush_pages_batch():
-                nonlocal pages_data, meta_data
-                if not pages_data:
-                    return
+            def _flush_pages_batch(pd: list, md: list):
+                """分批写库并 commit，返回空列表（调用方重新赋值）。pd/md 参数化避免 nonlocal 语法限制。"""
+                if not pd:
+                    return [], []
                 # 增量前先 DELETE（防 FTS5 重复记录）
-                for rel, *_ in pages_data:
+                for rel, *_ in pd:
                     try: db.execute("DELETE FROM pages_fts WHERE path=?", (rel,))
                     except sqlite3.Error: pass
                     db.execute("DELETE FROM pages_fts_jieba WHERE path=?", (rel,))
                 if ENABLE_TRIGRAM:
-                    db.executemany("INSERT INTO pages_fts(path,title,body,tags) VALUES(?,?,?,?)", pages_data)
+                    db.executemany("INSERT INTO pages_fts(path,title,body,tags) VALUES(?,?,?,?)", pd)
                 db.executemany("INSERT INTO pages_fts_jieba(path,title,body,tags) VALUES(?,?,?,?)",
                                [(rel, _jieba_seg(title), _jieba_seg(text) + (" " + aliases.replace(",", " ") if aliases else ""), tags)
-                                for rel, title, text, tags in pages_data])
-                db.executemany("INSERT OR REPLACE INTO page_meta(path,title,page_type,tags,aliases,size,updated) VALUES(?,?,?,?,?,?,?)", meta_data)
-                if EMBED_ENABLED and pages_data:
+                                for rel, title, text, tags in pd])
+                db.executemany("INSERT OR REPLACE INTO page_meta(path,title,page_type,tags,aliases,size,updated) VALUES(?,?,?,?,?,?,?)", md)
+                if EMBED_ENABLED and pd:
                     try:
-                        texts = [text[:800] for _, _, text, _ in pages_data]
+                        texts = [text[:800] for _, _, text, _ in pd]
                         vecs = embed_texts(texts)  # 等长，失败位 None
-                        for i, (rel, _, _, _) in enumerate(pages_data):
+                        for i, (rel, _, _, _) in enumerate(pd):
                             v = vecs[i] if i < len(vecs) else None
                             db.execute("DELETE FROM pages_vec WHERE path=?", (rel,))
                             if v is not None:
@@ -671,7 +671,7 @@ def reindex(full: bool = False) -> dict:
                     except Exception as e:
                         logger.warning("向量化分批失败（跳过该批）: %s", e)
                 db.commit()
-                pages_data, meta_data = [], []
+                return [], []
 
             for f in WIKI_ROOT.rglob("*.md"):
                 try: st = f.stat()
@@ -690,7 +690,7 @@ def reindex(full: bool = False) -> dict:
                 meta_data.append((rel, title, ptype or "note", tags, aliases, st.st_size, mt))
                 page_mtimes[rel] = mt; pages_upd += 1; updated_pages.add(rel)
                 if len(pages_data) >= REINDEX_FLUSH:
-                    _flush_pages_batch()
+                    pages_data, meta_data = _flush_pages_batch(pages_data, meta_data)
             for rel in (k for k in page_mtimes if not (WIKI_ROOT / k).exists()):  # 生成器省内存
                 try: db.execute("DELETE FROM pages_fts WHERE path=?", (rel,))
                 except sqlite3.Error: pass
@@ -701,7 +701,7 @@ def reindex(full: bool = False) -> dict:
                     try: db.execute("DELETE FROM pages_vec WHERE path=?", (rel,))
                     except sqlite3.Error: pass
                 page_mtimes.pop(rel); updated_pages.discard(rel)
-            _flush_pages_batch()  # 尾部剩余批次（不足 5000 页的）
+            pages_data, meta_data = _flush_pages_batch(pages_data, meta_data)  # 尾部剩余批次
             # --- 附件 ---
             atts_upd = 0
             atts_data, atts_fts_data, atts_content = [], [], []

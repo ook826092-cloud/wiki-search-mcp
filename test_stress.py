@@ -10,25 +10,27 @@ os.environ["EMBED_BASE_URL"] = ""   # 强制禁用嵌入（零额度消耗）
 os.environ["RERANK_BASE_URL"] = ""
 import server  # noqa: E402
 
-def test_bulk_reindex_100000_pages():
-    """🏆 5 万页全量索引（10 万页在 runner 32 分钟跑不完被取消，5 万页是极限且能完成）：正确性 + 性能报告"""
+def test_enterprise_million_pages():
+    """🏆🏆 企业级百万页：100 万页全量索引（10 批×10 万写入 + reindex 分批 flush）"""
     t0 = time.time()
-    for i in range(100000):
-        (TEST_ROOT / f"p{i:05}.md").write_text(
-            f"---\ntitle: 页面{i}\ntype: concept\ntags: [压力]\n---\n压力测试内容 {i} 号收藏夹管理方法",
-            encoding="utf-8")
+    for batch in range(10):
+        for i in range(batch * 100000, (batch + 1) * 100000):
+            (TEST_ROOT / f"p{i:06}.md").write_text(
+                f"---\ntitle: 页面{i}\ntype: concept\ntags: [压力]\n---\n压力测试内容 {i} 号收藏夹管理方法",
+                encoding="utf-8")
+        print(f"  📝 写入 {batch + 1}0 万页完成", flush=True)
     tw = time.time() - t0
     t0 = time.time()
-    server.reindex(full=True)
+    server.reindex(full=True)  # 分批 flush（5000/批），百万页可完成
     dt = time.time() - t0
     db = server.get_db()
     n = db.execute("SELECT count(*) c FROM page_meta").fetchone()["c"]
     size = os.path.getsize(os.environ["WIKI_DB"]) / 1e6
     db.close()
-    print(f"\n🏆 索引 100000 页: 写入 {tw:.0f}s + 索引 {dt:.0f}s（{100000/dt:.0f} 页/s），DB {size:.1f}MB")
-    assert n >= 100000, f"只索引到 {n} 页"
+    print(f"\n🏆🏆 索引 1000000 页: 写入 {tw:.0f}s + 索引 {dt:.0f}s（{1000000/dt:.0f} 页/s），DB {size:.1f}MB")
+    assert n >= 1000000, f"只索引到 {n} 页"
     r = server.search(query="收藏夹", limit=50)
-    assert r["total"] >= 100000, f"只搜到 {r['total']}"
+    assert r["total"] >= 1000000, f"只搜到 {r['total']}"
 
 def test_benchmark_query_10000():
     """🏆 1 万次查询压测：p50/p95/p99 + 最大 QPS"""
